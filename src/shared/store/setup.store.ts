@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
@@ -11,6 +12,27 @@ import type {
   Player,
   RenamePlayerResult,
 } from '@/shared/types/setup'
+
+const LEGACY_AVATAR_IDS = ['spark', 'wave', 'heart', 'leaf'] as const
+
+const legacySetupProfileSchema = setupProfileSchema
+  .omit({ avatar: true })
+  .extend({ avatar: z.unknown().optional() })
+
+function migrateLegacyProfile(persistedState: unknown) {
+  const result = legacySetupProfileSchema.safeParse(persistedState)
+  if (!result.success) return SETUP_PROFILE_DEFAULTS
+
+  const legacyAvatar = result.data.avatar
+  const isKnownLegacyAvatar = LEGACY_AVATAR_IDS.some((avatar) => avatar === legacyAvatar)
+  const migratedProfile = {
+    nickname: result.data.nickname,
+    avatar: isKnownLegacyAvatar ? 'avatar-1' : SETUP_PROFILE_DEFAULTS.avatar,
+  }
+
+  const migratedResult = setupProfileSchema.safeParse(migratedProfile)
+  return migratedResult.success ? migratedResult.data : SETUP_PROFILE_DEFAULTS
+}
 
 interface SetupState {
   avatar: AvatarId
@@ -99,17 +121,15 @@ export const useSetupStore = create<SetupState>()(
     }),
     {
       name: 'sin-pensar-setup-profile',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         nickname: state.nickname,
         avatar: state.avatar,
       }),
       migrate: (persistedState, version) => {
-        if (version !== 1) return SETUP_PROFILE_DEFAULTS
-
-        const result = setupProfileSchema.safeParse(persistedState)
-        return result.success ? result.data : SETUP_PROFILE_DEFAULTS
+        if (version === 1) return migrateLegacyProfile(persistedState)
+        return SETUP_PROFILE_DEFAULTS
       },
       merge: (persistedState, currentState) => {
         const result = setupProfileSchema.safeParse(persistedState)

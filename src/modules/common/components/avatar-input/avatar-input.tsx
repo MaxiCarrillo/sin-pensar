@@ -2,6 +2,7 @@ import { UserOutlined } from '@ant-design/icons'
 import { Input, Tooltip } from 'antd'
 import { useId, useState } from 'react'
 
+import { avatarMap } from '@/assets/avatars'
 import { AVATAR_OPTIONS } from '@/shared/constants/setup'
 import type { AvatarId } from '@/shared/types/setup'
 
@@ -19,6 +20,12 @@ interface AvatarInputProps {
   placeholder?: string
   maxLength?: number
   disabled?: boolean
+}
+
+const avatarShapeClasses = [styles.shape1, styles.shape2, styles.shape3, styles.shape4] as const
+
+function getAvatarShapeClass(index: number) {
+  return avatarShapeClasses[index % avatarShapeClasses.length] ?? styles.shape1
 }
 
 export function AvatarInput({
@@ -56,8 +63,8 @@ export function AvatarInput({
           aria-expanded={drawerOpen}
           onClick={() => setDrawerOpen(true)}
         >
-          <span className={`${styles.avatar} ${styles[`avatar${currentAvatarIndex + 1}`]}`} aria-hidden="true">
-            {currentAvatar.symbol}
+          <span className={`${styles.avatar} ${getAvatarShapeClass(currentAvatarIndex)}`}>
+            <img className={styles.avatarImage} src={avatarMap[currentAvatar.id]} alt="" />
           </span>
         </button>
       </Tooltip>
@@ -110,8 +117,8 @@ export function AvatarInput({
                   checked={avatar === option.id}
                   onChange={() => handleAvatarChange(option.id)}
                 />
-                <span className={`${styles.avatar} ${styles[`avatar${index + 1}`]}`} aria-hidden="true">
-                  {option.symbol}
+                <span className={`${styles.avatar} ${getAvatarShapeClass(index)}`}>
+                  <img className={styles.avatarImage} src={avatarMap[option.id]} alt="" />
                 </span>
                 <span className={styles.name}>{option.label}</span>
                 <span className={styles.selection} aria-hidden="true">

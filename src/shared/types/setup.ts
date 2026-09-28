@@ -1,6 +1,4 @@
-import type { AVATAR_OPTIONS } from '@/shared/constants/setup'
-
-export type AvatarId = (typeof AVATAR_OPTIONS)[number]['id']
+export type { AvatarId } from '@/assets/avatars'
 
 export interface Player {
   id: string
