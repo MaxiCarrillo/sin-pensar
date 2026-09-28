@@ -1,0 +1,37 @@
+.wrapper {
+  max-height: min(88svh, 42rem);
+}
+
+.section {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-surface);
+}
+
+.mask {
+  background: rgba(7, 43, 47, 0.58) !important;
+}
+
+.header {
+  padding: 1rem max(1rem, env(safe-area-inset-right)) 0 max(1rem, env(safe-area-inset-left));
+  border-bottom: 0;
+}
+
+.header :global(.ant-drawer-title) {
+  color: var(--color-primary-dark);
+  font-size: clamp(1.45rem, 7vw, 2rem);
+  font-weight: 900;
+}
+
+.body {
+  padding: var(--space-md) max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  overflow-y: auto;
+}
+
+.closeButton {
+  color: var(--color-text);
+}
+
+.closeButton:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
