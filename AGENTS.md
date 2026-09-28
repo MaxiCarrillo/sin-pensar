@@ -14,6 +14,8 @@ This is a frontend-only React/Vite repository. This root file governs the entire
 - Keep the product frontend-only. Do not introduce or describe server, room-service, auth, database, or network-authoritative behavior.
 - Keep source ownership explicit: `src/assets` for shipped assets, `src/core` for app configuration, `src/modules` for product features, and `src/shared` for genuinely reusable code.
 - Use CSS Modules for component styles. Keep reusable semantic tokens centralized in `src/index.css`.
+- Keep viewport backgrounds full-width. Center and cap only interactive route content through `#root` at the `390px` shell owned by `--mobile-breakpoint`; shell actions must anchor to that boundary on wide viewports.
+- Use Ant Design bottom drawers with viewport-level masks and panels but centered child content capped to the mobile shell, a compact centered accessible `hgroup`, no default header or visual close control, Escape/mask close, and focus management.
 - Keep gameplay state and persistence local to the browser. Define ownership, recovery, and privacy between pass-and-play transitions explicitly.
 - Use semantic controls, keyboard access, visible focus, accessible names, and non-color-only feedback.
 - Check narrow viewports, long content, and every relevant loading, empty, error, transition, and success state.

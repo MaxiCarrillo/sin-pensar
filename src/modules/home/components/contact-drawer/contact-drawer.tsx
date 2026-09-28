@@ -44,8 +44,12 @@ const contacts: ContactLink[] = [
 
 export function ContactDrawer({ open, onClose }: ContactDrawerProps) {
   return (
-    <AppDrawer open={open} title="Mis redes" closeLabel="Cerrar contacto" onClose={onClose}>
-      <p className={styles.description}>Mira mis trabajos y envíame tus sugerencias.</p>
+    <AppDrawer
+      open={open}
+      title="Mis redes"
+      description="Mira mis trabajos y envíame tus sugerencias."
+      onClose={onClose}
+    >
       <ul className={styles.links}>
         {contacts.map((contact) => (
           <li key={contact.title}>

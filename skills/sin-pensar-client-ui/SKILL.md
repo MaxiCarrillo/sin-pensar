@@ -17,6 +17,8 @@ Load for React components, client state, component styles, visual behavior, acce
 
 - Use colocated `*.module.css` files for component styles; keep only tokens and intentional global rules in `src/index.css`.
 - Reuse centralized semantic tokens. The target palette is background `#FFF`, primary `#00AAB7`, secondary `#DE2C6E`, and tertiary `#11B087`.
+- Keep viewport backgrounds full-width. Center and cap only interactive route content through `#root` at the shell defined by `--mobile-breakpoint: 390px`; anchor shell controls to that boundary instead of adding screen-specific desktop widths.
+- Keep Ant Design drawer masks and panels viewport-level, but center and cap the drawer's child content container to the mobile shell. Use bottom placement, `closable={false}`, mask/Escape close, focus management, a compact centered accessible `hgroup`, and no default header or visual close control.
 - Preserve Spanish product UI copy while keeping technical artifacts in English.
 - Use semantic controls, keyboard behavior, visible focus, accessible names, practical touch targets, and non-color-only feedback.
 - Render every applicable idle, transition, empty, active, paused, completed, error, and confirmation state.
@@ -28,6 +30,7 @@ Load for React components, client state, component styles, visual behavior, acce
 | --- | --- |
 | Reusable visual value | Add or reuse a semantic global token |
 | Component-only styling | Put it in the component CSS Module |
+| Drawer content | Reuse the shared bottom-drawer pattern and mobile content cap |
 | Local interaction | Prefer component state |
 | Gameplay transition | Follow `sin-pensar-game-flow` |
 

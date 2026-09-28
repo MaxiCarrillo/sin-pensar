@@ -14,7 +14,7 @@ export const appTheme: ThemeConfig = {
     colorLink: '#007F89',
     borderRadius: 16,
     borderRadiusLG: 24,
-    controlHeightLG: 52,
+    controlHeightLG: 40,
     fontFamily: "Inter, ui-rounded, 'Segoe UI', system-ui, sans-serif",
   },
   components: {

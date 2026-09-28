@@ -1,13 +1,14 @@
 .footer {
   display: flex;
-  width: min(100%, var(--content-width));
-  margin: auto auto 0;
-  padding: var(--space-lg) 0 max(var(--space-md), env(safe-area-inset-bottom));
+  width: 100%;
+  margin: 0;
+  padding: 0;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
   color: var(--color-text-muted);
-  font-size: 0.72rem;
+  font-size: 0.725rem;
+  line-height: var(--home-footer-height, 1.125rem);
 }
 
 .footer a {

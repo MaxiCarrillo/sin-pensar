@@ -1,48 +1,39 @@
-import { CloseOutlined } from '@ant-design/icons'
-import { Button, Drawer } from 'antd'
-import type { ReactNode } from 'react'
+import { Drawer } from 'antd'
+import { useId, type ReactNode } from 'react'
 
 import styles from './app-drawer.module.css'
 
 interface AppDrawerProps {
   open: boolean
   title: string
-  closeLabel: string
+  description: string
   onClose: () => void
   children: ReactNode
 }
 
-export function AppDrawer({ open, title, closeLabel, onClose, children }: AppDrawerProps) {
+export function AppDrawer({ open, title, description, onClose, children }: AppDrawerProps) {
+  const titleId = useId()
+  const descriptionId = useId()
+
   return (
     <Drawer
-      classNames={{
-        body: styles.body,
-        header: styles.header,
-        mask: styles.mask,
-        section: styles.section,
-        wrapper: styles.wrapper,
-      }}
+      aria-describedby={descriptionId}
+      aria-labelledby={titleId}
       closable={false}
       destroyOnHidden
-      extra={(
-        <Button
-          className={styles.closeButton}
-          type="text"
-          shape="circle"
-          icon={<CloseOutlined />}
-          aria-label={closeLabel}
-          onClick={onClose}
-        />
-      )}
       focusable={{ trap: true, focusTriggerAfterClose: true }}
-      mask={{ enabled: true, blur: true, closable: true }}
+      keyboard
       open={open}
       placement="bottom"
-      size="large"
-      title={title}
       onClose={onClose}
     >
-      {children}
+      <div className={styles.content}>
+        <hgroup className={styles.drawerHeader}>
+          <h2 id={titleId}>{title}</h2>
+          <p id={descriptionId}>{description}</p>
+        </hgroup>
+        {children}
+      </div>
     </Drawer>
   )
 }

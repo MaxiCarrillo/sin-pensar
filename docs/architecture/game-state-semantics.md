@@ -2,7 +2,7 @@
 
 ## Current evidence
 
-No gameplay state machine, roster, teams, rounds, deck, timer, or persistence behavior is implemented in the tracked starter.
+The setup flow has a transient local roster and an explicit transient owner-player identifier that keeps a successful owner rename coherent with the profile nickname. The nickname and avatar profile is the only persisted state; it uses a versioned, Zod-validated local-storage boundary and safely falls back to defaults for invalid or incompatible data. The roster, drafts, errors, and setup UI state are not persisted. No gameplay state machine, teams, rounds, deck, or timer behavior is implemented.
 
 ## Target invariants
 

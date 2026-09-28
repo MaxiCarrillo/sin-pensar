@@ -1,14 +1,14 @@
 import {
   ArrowLeftOutlined,
-  MinusOutlined,
+  MinusCircleOutlined,
   PlusOutlined,
   QuestionOutlined,
-  SettingOutlined,
-  TeamOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
-import { Button, Input, Tooltip, type InputRef } from 'antd'
+import { Button, Divider, Input, Tooltip, type InputRef } from 'antd'
 import { useRef, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { AppDrawer } from '@/modules/common'
@@ -18,63 +18,129 @@ import type { Player } from '@/shared/types/setup'
 
 import styles from './players.module.css'
 
-interface StatusMessage {
-  kind: 'error' | 'info'
-  text: string
+const EMPTY_NAME_MESSAGE = 'El nombre no puede estar vacío'
+
+function normalizeName(name: string) {
+  return name.trim().toLocaleLowerCase('es')
+}
+
+function getDuplicateName(players: Player[], playerId: string | null, name: string) {
+  const trimmedName = name.trim()
+  if (!trimmedName) return undefined
+
+  const normalizedName = normalizeName(trimmedName)
+  return players.some(
+    (player) => player.id !== playerId && normalizeName(player.name) === normalizedName,
+  )
+    ? `${trimmedName} ya está en la lista.`
+    : undefined
+}
+
+function getNameError(players: Player[], playerId: string | null, name: string) {
+  if (!name.trim()) return EMPTY_NAME_MESSAGE
+  return getDuplicateName(players, playerId, name)
+}
+
+function getMissingPlayersMessage(missingPlayers: number) {
+  return missingPlayers === 1
+    ? 'Se necesita al menos 1 jugador más.'
+    : `Se necesitan al menos ${missingPlayers} jugadores más.`
 }
 
 function PlayersPage() {
   const navigate = useNavigate()
-  const { nickname, players, addPlayer, removePlayer } = useSetupStore(
+  const { nickname, players, addPlayer, removePlayer, renamePlayer } = useSetupStore(
     useShallow((state) => ({
       nickname: state.nickname,
       players: state.players,
       addPlayer: state.addPlayer,
       removePlayer: state.removePlayer,
+      renamePlayer: state.renamePlayer,
     })),
   )
   const [name, setName] = useState('')
-  const [status, setStatus] = useState<StatusMessage | null>(null)
+  const [newNameTouched, setNewNameTouched] = useState(false)
+  const [playerDrafts, setPlayerDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(players.map((player) => [player.id, player.name])),
+  )
   const [helpOpen, setHelpOpen] = useState(false)
   const inputRef = useRef<InputRef>(null)
-  const canBuildTeams = players.length >= MIN_PLAYERS
+  const missingPlayers = Math.max(MIN_PLAYERS - players.length, 0)
+  const playerErrors = Object.fromEntries(
+    players.map((player) => {
+      const draft = playerDrafts[player.id] ?? player.name
+      return [player.id, getNameError(players, player.id, draft)]
+    }),
+  )
+  const hasInvalidDraft = Object.values(playerErrors).some(Boolean)
+  const hasUncommittedDraft = players.some(
+    (player) => (playerDrafts[player.id] ?? player.name) !== player.name,
+  )
+  const canBuildTeams = missingPlayers === 0 && !hasInvalidDraft && !hasUncommittedDraft
+  const newNameError = newNameTouched ? getNameError(players, null, name) : undefined
+  const teamValidationMessage = missingPlayers
+    ? getMissingPlayersMessage(missingPlayers)
+    : hasInvalidDraft
+      ? 'Corregí los nombres de los jugadores antes de armar equipos.'
+      : hasUncommittedDraft
+        ? 'Confirmá los nombres editados con Enter o al salir del campo.'
+        : undefined
 
-  if (!nickname.trim()) {
+  if (!nickname.trim() || players.length === 0) {
     return <Navigate to="/" replace />
   }
 
   const handleAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setNewNameTouched(true)
     const result = addPlayer(name)
 
     if (result.kind === 'empty') {
-      setStatus({ kind: 'error', text: 'Escribí un nombre antes de agregar al jugador.' })
       inputRef.current?.focus()
       return
     }
 
     if (result.kind === 'duplicate') {
-      setStatus({ kind: 'error', text: `${result.name} ya está en la lista.` })
       inputRef.current?.focus()
       return
     }
 
+    setPlayerDrafts((drafts) => ({ ...drafts, [result.player.id]: result.player.name }))
     setName('')
-    setStatus({ kind: 'info', text: `${result.player.name} fue agregado.` })
+    setNewNameTouched(false)
     inputRef.current?.focus()
   }
 
   const handleRemove = (player: Player) => {
     removePlayer(player.id)
-    setStatus({ kind: 'info', text: `${player.name} fue eliminado.` })
+    setPlayerDrafts((drafts) => {
+      const nextDrafts = { ...drafts }
+      delete nextDrafts[player.id]
+      return nextDrafts
+    })
+  }
+
+  const handleDraftChange = (playerId: string, value: string) => {
+    setPlayerDrafts((drafts) => ({ ...drafts, [playerId]: value }))
+  }
+
+  const handleRename = (player: Player) => {
+    const draft = playerDrafts[player.id] ?? player.name
+    const result = renamePlayer(player.id, draft)
+    if (result.kind !== 'updated') return
+
+    setPlayerDrafts((drafts) => ({
+      ...drafts,
+      [player.id]: result.player.name,
+    }))
   }
 
   return (
     <div className={styles.page}>
-      <header className={styles.topBar}>
+      <header className={styles.header}>
         <Tooltip title="Volver al inicio">
           <Button
-            className={`${styles.iconButton} ${styles.backButton}`}
+            className={styles.backButton}
             type="primary"
             shape="circle"
             icon={<ArrowLeftOutlined />}
@@ -85,7 +151,7 @@ function PlayersPage() {
         <h1>JUGADORES</h1>
         <Tooltip title="Ayuda">
           <Button
-            className={`${styles.iconButton} ${styles.helpButton}`}
+            className={styles.helpButton}
             type="primary"
             shape="circle"
             icon={<QuestionOutlined />}
@@ -97,111 +163,143 @@ function PlayersPage() {
         </Tooltip>
       </header>
 
-      <AppDrawer open={helpOpen} title="Cómo jugar" closeLabel="Cerrar ayuda" onClose={() => setHelpOpen(false)}>
+      <AppDrawer
+        open={helpOpen}
+        title="Cómo jugar"
+        description="Conocé los pasos para preparar la partida."
+        onClose={() => setHelpOpen(false)}
+      >
         <p className={styles.helpContent}>Las instrucciones detalladas se agregarán próximamente.</p>
       </AppDrawer>
 
       <main className={styles.main}>
-        <section className={styles.roster} aria-labelledby="roster-title">
-          <div className={styles.sectionHeading}>
-            <h2 id="roster-title">Lista de jugadores</h2>
-            <span aria-label={`${players.length} jugadores`}>{players.length}</span>
-          </div>
-
-          {players.length > 0 ? (
-            <ul className={styles.playerList}>
+        <form className={styles.form} onSubmit={handleAdd} noValidate>
+          <div className={styles.entryArea}>
+            <ul className={styles.playerList} aria-label="Jugadores">
               {players.map((player) => (
-                <li key={player.id}>
-                  <span title={player.name}>{player.name}</span>
+                <li key={player.id} className={styles.playerRow}>
+                  <div className={styles.playerField}>
+                    <label className="visually-hidden" htmlFor={`player-${player.id}`}>
+                      Nombre de {player.name}
+                    </label>
+                    <Input
+                      allowClear
+                      className={styles.playerInput}
+                      id={`player-${player.id}`}
+                      name={`player-${player.id}`}
+                      size="large"
+                      value={playerDrafts[player.id] ?? player.name}
+                      maxLength={MAX_NAME_LENGTH}
+                      autoComplete="off"
+                      prefix={<UserOutlined />}
+                      showCount
+                      status={playerErrors[player.id] ? 'error' : undefined}
+                      required
+                      aria-describedby={playerErrors[player.id] ? `player-${player.id}-error` : undefined}
+                      aria-invalid={playerErrors[player.id] ? true : undefined}
+                      onBlur={() => handleRename(player)}
+                      onChange={(event) => handleDraftChange(player.id, event.target.value)}
+                      onPressEnter={(event) => {
+                        event.preventDefault()
+                        handleRename(player)
+                      }}
+                    />
+                    {playerErrors[player.id] ? (
+                      <span
+                        id={`player-${player.id}-error`}
+                        className={styles.validationMessage}
+                        role="alert"
+                      >
+                        {playerErrors[player.id]}
+                      </span>
+                    ) : null}
+                  </div>
                   <Tooltip title={`Eliminar a ${player.name}`}>
                     <Button
                       className={styles.removeButton}
-                      type="primary"
-                      shape="circle"
-                      icon={<MinusOutlined />}
+                      size="large"
+                      icon={<MinusCircleOutlined />}
                       aria-label={`Eliminar a ${player.name}`}
+                      htmlType="button"
                       onClick={() => handleRemove(player)}
                     />
                   </Tooltip>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className={styles.emptyState}>Todavía no hay jugadores. Agregá el primero para continuar.</p>
-          )}
 
-          <form className={styles.addForm} onSubmit={handleAdd} noValidate>
-            <label htmlFor="player-name">Nombre del jugador</label>
-            <Input
-              ref={inputRef}
-              className={styles.playerInput}
-              id="player-name"
-              name="player-name"
-              size="large"
-              value={name}
-              maxLength={MAX_NAME_LENGTH}
-              autoComplete="off"
-              placeholder="Escribí un nombre"
-              aria-describedby="player-name-help player-status"
-              aria-invalid={status?.kind === 'error'}
-              onChange={(event) => {
-                setName(event.target.value)
-                setStatus(null)
-              }}
-            />
-            <span id="player-name-help" className={styles.inputHelp}>{name.length}/{MAX_NAME_LENGTH} caracteres</span>
+            <div className={styles.playerField}>
+              <label className="visually-hidden" htmlFor="player-name">Nombre del jugador</label>
+              <Input
+                allowClear
+                ref={inputRef}
+                className={styles.playerInput}
+                id="player-name"
+                name="player-name"
+                size="large"
+                value={name}
+                maxLength={MAX_NAME_LENGTH}
+                autoComplete="off"
+                placeholder="Ingresar nombre"
+                prefix={<UserOutlined />}
+                showCount
+                status={newNameError ? 'error' : undefined}
+                required
+                aria-describedby={newNameError ? 'new-player-error' : undefined}
+                aria-invalid={newNameError ? true : undefined}
+                onBlur={() => setNewNameTouched(true)}
+                onChange={(event) => setName(event.target.value)}
+              />
+              {newNameError ? (
+                <span id="new-player-error" className={styles.validationMessage} role="alert">
+                  {newNameError}
+                </span>
+              ) : null}
+            </div>
             <Button
               className={styles.addButton}
               htmlType="submit"
+              type="dashed"
               size="large"
               icon={<PlusOutlined />}
+              block
             >
               Agregar jugador
             </Button>
-          </form>
+            {teamValidationMessage ? (
+              <p id="team-requirement" className={styles.teamValidation} role="status">
+                {teamValidationMessage}
+              </p>
+            ) : null}
+          </div>
 
-          <p
-            id="player-status"
-            className={`${styles.status} ${status?.kind === 'error' ? styles.error : ''}`}
-            role={status?.kind === 'error' ? 'alert' : 'status'}
-            aria-live="polite"
-          >
-            {status?.text ?? ''}
-          </p>
-        </section>
-
-        <section className={styles.actions} aria-label="Acciones de preparación">
-          <p id="team-requirement">
-            {canBuildTeams
-              ? 'Requisito mínimo alcanzado.'
-              : `Se necesitan al menos ${MIN_PLAYERS} jugadores. Faltan ${MIN_PLAYERS - players.length}.`}
-          </p>
-          <div className={styles.actionButtons}>
+          <footer className={styles.actions} aria-label="Acciones de preparación">
+            <Divider className={styles.actionsDivider} />
             <Button
               className={styles.settingsButton}
               size="large"
-              icon={<SettingOutlined />}
-              onClick={() => setStatus({ kind: 'info', text: 'La configuración estará disponible próximamente.' })}
+              htmlType="button"
+              onClick={() => toast.info('La configuración estará disponible próximamente.')}
             >
               Configuración
             </Button>
-            <Tooltip title={canBuildTeams ? undefined : 'Se necesitan al menos cuatro jugadores'}>
+            <Tooltip title={canBuildTeams ? undefined : teamValidationMessage}>
               <span className={styles.buttonWrapper}>
                 <Button
                   className={styles.teamsButton}
                   type="primary"
                   size="large"
-                  icon={<TeamOutlined />}
+                  htmlType="button"
                   disabled={!canBuildTeams}
-                  aria-describedby="team-requirement"
-                  onClick={() => setStatus({ kind: 'info', text: 'La creación de equipos estará disponible próximamente.' })}
+                  aria-describedby={teamValidationMessage ? 'team-requirement' : undefined}
+                  onClick={() => toast.info('La creación de equipos estará disponible próximamente.')}
                 >
                   Armar equipos
                 </Button>
               </span>
             </Tooltip>
-          </div>
-        </section>
+          </footer>
+        </form>
       </main>
     </div>
   )

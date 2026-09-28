@@ -2,7 +2,7 @@
 
 ## Current evidence
 
-Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its client uses React Router 8 for declarative browser routes, Ant Design 6 for behavior-rich controls, Zustand 5 for cross-route setup state, and Sonner 2 as the configured notification host. No server, authentication, room, or persistence layer is implemented.
+Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its client uses React Router 8 for declarative browser routes, Ant Design 6 for behavior-rich controls, Zustand 5 for cross-route setup state, and Sonner 2 as the configured notification host. No server, authentication, or room layer is implemented.
 
 ## Source ownership
 
@@ -11,7 +11,7 @@ Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its 
 - `src/modules` owns route pages and product components, with `modules/common` reserved for components shared across product modules.
 - `src/shared` owns reusable constants, types, and the focused setup store.
 
-`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, committed nickname, and roster across `/` and `/players`; field values, drawers, and status messages remain local to their components. Setup state is intentionally not persisted.
+`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, nickname, owner-player identity, and roster across `/` and `/players`; field values, drawers, and status messages remain local to their components. Only the validated, versioned `nickname` and `avatar` profile is persisted in local storage. The roster and owner-player identity remain transient, so `/players` redirects home when no committed roster exists after a reload.
 
 ## Target boundaries
 

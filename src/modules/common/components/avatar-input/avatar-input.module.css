@@ -1,0 +1,146 @@
+.container {
+  display: grid;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+}
+
+.avatarButton {
+  display: grid;
+  justify-self: center;
+  justify-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-dark);
+  cursor: pointer;
+}
+
+.avatarButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.avatar {
+  display: grid;
+  width: var(--avatar-size-xl);
+  aspect-ratio: 1;
+  place-items: center;
+  border: 3px solid white;
+  border-radius: 42% 58% 48% 52%;
+  box-shadow: var(--shadow-control);
+  color: white;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.avatar1 { background: var(--color-primary); }
+.avatar2 { background: var(--color-tertiary); border-radius: 50%; }
+.avatar3 { background: var(--color-secondary); border-radius: 58% 42% 55% 45%; }
+.avatar4 { background: linear-gradient(145deg, var(--color-primary), var(--color-secondary)); border-radius: 50% 40%; }
+
+.inputGroup {
+  display: grid;
+}
+
+.nicknameInput {
+  border-width: 2px;
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.nicknameInput :global(.ant-input-prefix) {
+  color: var(--color-primary-dark);
+}
+
+.inputHelp {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.inputError {
+  color: var(--color-secondary-dark);
+  font-weight: 700;
+}
+
+.fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.option {
+  position: relative;
+  min-width: 0;
+  padding: 0.45rem 0.15rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 160ms ease, transform 160ms ease, background-color 160ms ease;
+}
+
+.option:hover {
+  transform: translateY(-2px);
+}
+
+.option:has(.radio:checked) {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, white);
+}
+
+.option:has(.radio:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.option .avatar {
+  width: clamp(3rem, 15vw, 4rem);
+  margin-inline: auto;
+  font-size: 1.75rem;
+}
+
+.radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.name,
+.selection {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.selection {
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+}
+
+.option:has(.radio:checked) .selection {
+  color: var(--color-primary-dark);
+  font-weight: 800;
+}
+
+@media (max-width: 350px) {
+  .options { gap: 0.2rem; }
+  .name { font-size: 0.67rem; }
+}

@@ -11,3 +11,9 @@ export type AddPlayerResult =
   | { kind: 'added'; player: Player }
   | { kind: 'empty' }
   | { kind: 'duplicate'; name: string }
+
+export type RenamePlayerResult =
+  | { kind: 'updated'; player: Player }
+  | { kind: 'empty' }
+  | { kind: 'duplicate'; name: string }
+  | { kind: 'missing' }
