@@ -1,0 +1,257 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  padding: max(var(--space-md), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right)) max(var(--space-md), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.page::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: var(--color-background);
+}
+
+@supports (height: 100dvh) {
+  .page {
+    height: 100dvh;
+  }
+}
+
+.handoff,
+.completion,
+.selectionLayout {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.handoff {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-lg);
+  text-align: center;
+}
+
+.handoffContent {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding-block: var(--space-sm);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.turnLabel {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.1;
+}
+
+.handoff h1 {
+  max-width: 100%;
+  color: var(--color-text);
+  font-size: clamp(2.25rem, 13vw, 3.25rem);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 1;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.privacyInstruction {
+  max-width: 19rem;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.45;
+}
+
+.deckSummary {
+  display: grid;
+  min-width: min(14rem, 100%);
+  padding: var(--space-sm) var(--space-md);
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-tinted);
+  box-shadow: var(--shadow-control);
+}
+
+.deckSummary span,
+.eyebrow {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.08em;
+}
+
+.deckSummary strong {
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-lg);
+}
+
+.handoffError {
+  max-width: 19rem;
+  color: var(--color-secondary-dark);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.revealButton,
+.completionActions button,
+.selectionActions button {
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-extrabold);
+  white-space: normal;
+}
+
+.completion {
+  display: flex;
+  padding-block: var(--space-sm);
+  align-items: center;
+  justify-content: center;
+  justify-content: safe center;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  text-align: center;
+}
+
+.completionIcon {
+  color: var(--color-tertiary-dark);
+  font-size: 4rem;
+}
+
+.completionCopy {
+  display: grid;
+  max-width: 20rem;
+  gap: var(--space-sm);
+}
+
+.completionCopy h1 {
+  font-size: var(--font-size-2xl);
+  line-height: 1.1;
+}
+
+.completionCopy > p:last-child {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.completionActions {
+  display: grid;
+  width: 100%;
+  gap: var(--space-sm);
+}
+
+.selectionLayout {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-sm);
+  overflow: hidden;
+}
+
+.selectionHeader {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  text-align: center;
+}
+
+.selectionHeader h1 {
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-lg);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.lightningProgress {
+  color: var(--color-secondary-dark);
+}
+
+.instruction,
+.feedback,
+.saveHelp {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.instruction,
+.saveHelp {
+  color: var(--color-text-muted);
+}
+
+.feedback {
+  min-height: 1rem;
+  color: var(--color-primary-dark);
+}
+
+.cardScroller {
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--space-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.cardList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  grid-auto-rows: max-content;
+  gap: var(--space-lg);
+  list-style: none;
+}
+
+.cardList li {
+  min-width: 0;
+}
+
+.selectionActions {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.saveHelp {
+  text-align: center;
+}
+
+@media (max-width: 350px) {
+  .page {
+    padding-inline: var(--space-sm);
+  }
+
+  .handoff h1 {
+    font-size: clamp(2rem, 12vw, 2.75rem);
+  }
+
+  .selectionHeader h1 {
+    font-size: var(--font-size-md);
+  }
+}

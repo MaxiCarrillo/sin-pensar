@@ -16,6 +16,7 @@ import {
   isTurnDuration,
   MAIN_DECK_CARD_OPTIONS,
   MAX_NAME_LENGTH,
+  MAX_PLAYERS,
   MIN_PLAYERS,
   TURN_DURATION_OPTIONS,
 } from '@/shared/constants/setup'
@@ -105,6 +106,8 @@ function PlayersPage() {
   const [teamCountDraft, setTeamCountDraft] = useState<TeamCount>(teamCount)
   const inputRefs = useRef<Record<string, InputRef | null>>({})
   const missingPlayers = Math.max(MIN_PLAYERS - players.length, 0)
+  const hasReachedPlayerLimit = players.length >= MAX_PLAYERS
+  const isRosterWithinCapacity = players.length <= MAX_PLAYERS
   const draftPlayers = players.map((player) => ({
     ...player,
     name: playerDrafts[player.id] ?? player.name,
@@ -119,23 +122,31 @@ function PlayersPage() {
   const hasUncommittedDraft = players.some(
     (player) => (playerDrafts[player.id] ?? player.name) !== player.name,
   )
-  const canBuildTeams = missingPlayers === 0 && !hasInvalidDraft && !hasUncommittedDraft
+  const canBuildTeams =
+    missingPlayers === 0 &&
+    isRosterWithinCapacity &&
+    !hasInvalidDraft &&
+    !hasUncommittedDraft
   const hasFinalizedRoster = canBuildTeams && isRosterValid(players)
   const validTeamCounts = hasFinalizedRoster ? deriveValidTeamCounts(players.length) : []
   const teamValidationMessage = missingPlayers
     ? getMissingPlayersMessage(missingPlayers)
-    : hasInvalidDraft
-      ? 'Corregí los nombres de los jugadores antes de armar equipos.'
-      : hasUncommittedDraft
-        ? 'Confirmá los nombres editados con Enter o al salir del campo.'
-        : undefined
+    : !isRosterWithinCapacity
+      ? `La lista admite hasta ${MAX_PLAYERS} jugadores.`
+      : hasInvalidDraft
+        ? 'Corregí los nombres de los jugadores antes de armar equipos.'
+        : hasUncommittedDraft
+          ? 'Confirmá los nombres editados con Enter o al salir del campo.'
+          : undefined
 
   if (!nickname.trim() || players.length === 0) {
     return <Navigate to="/" replace />
   }
 
   const handleAdd = () => {
-    const player = addPlayer()
+    const result = addPlayer()
+    if (result.kind === 'limit-reached') return
+    const { player } = result
     setPlayerDrafts((drafts) => ({ ...drafts, [player.id]: player.name }))
     requestAnimationFrame(() => inputRefs.current[player.id]?.focus())
   }
@@ -344,10 +355,17 @@ function PlayersPage() {
               size="large"
               icon={<PlusOutlined />}
               block
+              disabled={hasReachedPlayerLimit}
+              aria-describedby={hasReachedPlayerLimit ? 'player-limit' : undefined}
               onClick={handleAdd}
             >
               Agregar jugador
             </Button>
+            {hasReachedPlayerLimit ? (
+              <p id="player-limit" className={styles.playerLimit} role="status">
+                Alcanzaste el máximo de {MAX_PLAYERS} jugadores para repartir 10 cartas por persona.
+              </p>
+            ) : null}
             {teamValidationMessage ? (
               <p id="team-requirement" className={styles.teamValidation} role="status">
                 {teamValidationMessage}

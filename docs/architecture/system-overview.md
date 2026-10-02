@@ -9,9 +9,9 @@ Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its 
 - `src/assets` owns shipped visual assets.
 - `src/core` owns application-wide route and Ant Design theme configuration.
 - `src/modules` owns route pages and product components, with `modules/common` reserved for components shared across product modules.
-- `src/shared` owns reusable constants, types, and the focused setup store.
+- `src/shared` owns the reusable local card catalog, pure setup/draft domain rules, constants, types, and the focused setup store.
 
-`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, nickname, owner-player identity, roster, turn duration, main-deck card count, selected team count, and the committed ID-based team assignment across `/`, `/players`, and `/teams`; configuration and assignment drafts, player selection, drawers, and status messages remain local to their components. Valid team counts are derived dynamically from the finalized roster as every integer from 2 through `floor(playerCount / 2)`. The Teams route edits a local draft that may be incomplete, commits only complete balanced membership, and can immediately commit injected-random balanced draws. Only the validated, versioned `nickname` and `avatar` profile is persisted in local storage. All other setup values remain transient, so protected setup routes redirect home when no committed owner roster exists after a reload.
+`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, nickname, owner-player identity, roster, turn duration, main-deck card count, selected team count, the committed ID-based team assignment, and the transient private card draft across `/`, `/players`, `/teams`, and `/cards`. Configuration and assignment drafts, player selection, drawers, route-level privacy unlocks, and status messages remain local to their components. Valid team counts are derived dynamically from the finalized roster as every integer from 2 through `floor(playerCount / 2)`. The Teams route edits a local draft that may be incomplete, commits only complete balanced membership, and starts card selection only from complete balanced membership. The shared local catalog contains 200 stable card records; pure domain transitions deal 10 globally unique IDs per player, require explicit confirmation of each 3/4/5-card main selection, then accept one distinct lightning selection from only the remaining cards before advancing to the next private handoff. Only the validated, versioned `nickname` and `avatar` profile is persisted in local storage. All roster, team, and card-draft values remain transient, so reloads and missing setup state fail closed to setup routes instead of recovering private cards.
 
 ## Target boundaries
 
@@ -21,4 +21,4 @@ Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its 
 - Keep category/card content and assets client-side. Stable identifiers connect catalog records, selections, persisted snapshots, and assets.
 - Keep transition screens private for pass-and-play: the next player must deliberately reveal private content.
 
-The gameplay boundaries remain target rules beyond the currently implemented setup flow. See [game-state semantics](game-state-semantics.md) for transition invariants.
+The gameplay boundaries beyond the implemented setup and private card-draft flow remain target rules. See [game-state semantics](game-state-semantics.md) for transition invariants.

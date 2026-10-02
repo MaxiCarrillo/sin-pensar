@@ -10,6 +10,7 @@ import { Navigate, useNavigate } from 'react-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import { AppDrawer } from '@/modules/common'
+import { CARD_IDS } from '@/shared/catalog/card-catalog'
 import {
   buildTeamIds,
   createBalancedTeamAssignment,
@@ -71,17 +72,25 @@ function getPlayerTeamLabel(teamId: TeamId | undefined, teamIds: TeamId[]) {
 
 function TeamsPage() {
   const navigate = useNavigate()
-  const { nickname, ownerPlayerId, players, teamCount, teamAssignment, commitTeamAssignment } =
-    useSetupStore(
-      useShallow((state) => ({
-        nickname: state.nickname,
-        ownerPlayerId: state.ownerPlayerId,
-        players: state.players,
-        teamCount: state.teamCount,
-        teamAssignment: state.teamAssignment,
-        commitTeamAssignment: state.commitTeamAssignment,
-      })),
-    )
+  const {
+    nickname,
+    ownerPlayerId,
+    players,
+    teamCount,
+    teamAssignment,
+    commitTeamAssignment,
+    startCardDraft,
+  } = useSetupStore(
+    useShallow((state) => ({
+      nickname: state.nickname,
+      ownerPlayerId: state.ownerPlayerId,
+      players: state.players,
+      teamCount: state.teamCount,
+      teamAssignment: state.teamAssignment,
+      commitTeamAssignment: state.commitTeamAssignment,
+      startCardDraft: state.startCardDraft,
+    })),
+  )
   const teamIds = buildTeamIds(teamCount)
   const targetSizes = deriveBalancedTeamSizes(players.length, teamCount)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -149,6 +158,23 @@ function TeamsPage() {
     setHasRandomized(true)
     setDrawerOpen(false)
     setStatusMessage('Se creó y aplicó una nueva distribución equilibrada al azar.')
+  }
+
+  const handleStartCardDraft = () => {
+    if (draftResult.kind === 'invalid') {
+      setStatusMessage(getValidationMessage(draftResult.reason))
+      return
+    }
+    if (commitTeamAssignment(draftResult.assignment).kind === 'invalid') {
+      setStatusMessage('No se pudo confirmar la distribución antes de elegir cartas.')
+      return
+    }
+    const startResult = startCardDraft(CARD_IDS, Math.random)
+    if (startResult.kind === 'rejected') {
+      setStatusMessage('No se pudo preparar un reparto privado con la configuración actual.')
+      return
+    }
+    navigate('/cards')
   }
 
   const validationMessage =
@@ -298,11 +324,19 @@ function TeamsPage() {
           >
             Lista de jugadores
           </Button>
-          <Button type="primary" size="large" disabled aria-describedby="card-selection-help">
+          <Button
+            type="primary"
+            size="large"
+            disabled={draftResult.kind === 'invalid'}
+            aria-describedby="card-selection-help"
+            onClick={handleStartCardDraft}
+          >
             Elegir cartas
           </Button>
           <p id="card-selection-help" className={styles.actionHelp}>
-            La selección de cartas todavía no está disponible.
+            {draftResult.kind === 'invalid'
+              ? validationMessage
+              : 'Cada jugador recibirá 10 cartas y las elegirá en privado.'}
           </p>
         </section>
       </main>

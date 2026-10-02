@@ -2,7 +2,7 @@
 
 ## Current evidence
 
-`package.json` defines `dev`, `build`, `lint`, and `preview`. It has no `test` script, no test dependency, and no test configuration. `npm run lint` invokes `eslint .` without a fix flag. `npm run build` invokes `tsc -b && vite build` and writes build output to ignored `dist/`.
+`package.json` defines `dev`, `build`, `lint`, `preview`, and the focused `verify:card-draft` harness. It has no general test script, test dependency, or test configuration. `npm run lint` invokes `eslint .` without a fix flag. `npm run build` invokes `tsc -b && vite build` and writes build output to ignored `dist/`.
 
 ## Safe check matrix
 
@@ -11,6 +11,7 @@
 | `npm run lint` | Intended non-fixing static check; inspect the working tree afterward |
 | `npx tsc -b --noEmit` | Do not assume valid: build-mode/no-emit compatibility depends on tracked TypeScript config |
 | `npm run build` | Type and bundle verification; mutates ignored `dist/` |
+| `npm run verify:card-draft` | Deterministic Node harness for catalog/deal integrity, explicit main confirmation, 3/4/5-card lightning exclusion, per-player phase/privacy transitions, setup invalidation, and focused card/source structure; not a browser or general test runner |
 | `npm test` | Unavailable; do not invent or report tests |
 
 For skills and routing, use the sync dry-run and convergence checks documented in `docs/skills.md`. Validate links and metadata structurally.

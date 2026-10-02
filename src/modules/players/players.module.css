@@ -147,6 +147,14 @@
   text-align: center;
 }
 
+.playerLimit {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
 .addButton {
   border-color: var(--color-primary);
   border-radius: var(--radius-sm);

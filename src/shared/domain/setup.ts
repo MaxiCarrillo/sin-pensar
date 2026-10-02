@@ -1,4 +1,4 @@
-import { MIN_PLAYERS, MIN_PLAYERS_PER_TEAM } from '@/shared/constants/setup'
+import { MAX_PLAYERS, MIN_PLAYERS, MIN_PLAYERS_PER_TEAM } from '@/shared/constants/setup'
 import type {
   Player,
   TeamAssignment,
@@ -12,7 +12,7 @@ export function normalizePlayerName(name: string) {
 }
 
 export function isRosterValid(players: Player[]) {
-  if (players.length < MIN_PLAYERS) return false
+  if (players.length < MIN_PLAYERS || players.length > MAX_PLAYERS) return false
 
   const normalizedNames = players.map((player) => normalizePlayerName(player.name))
   const playerIds = players.map((player) => player.id)
@@ -104,7 +104,7 @@ function createEmptyMemberships(teamCount: TeamCount): TeamMembership[] {
   return buildTeamIds(teamCount).map((teamId) => ({ teamId, playerIds: [] }))
 }
 
-function getAssignmentSignature(assignment: TeamAssignment) {
+export function getTeamAssignmentSignature(assignment: TeamAssignment) {
   return assignment.teams
     .map((team) => `${team.teamId}:${[...team.playerIds].sort().join(',')}`)
     .join('|')
@@ -264,14 +264,14 @@ export function createRandomTeamAssignment(
 
   const previousSignature =
     previousAssignment && validateTeamAssignment(players, teamCount, previousAssignment).kind === 'valid'
-      ? getAssignmentSignature(previousAssignment)
+      ? getTeamAssignmentSignature(previousAssignment)
       : undefined
   const playerIds = players.map((player) => player.id)
 
   for (let attempt = 0; attempt < RANDOM_DRAW_ATTEMPTS; attempt += 1) {
     const shuffledIds = shufflePlayerIds(playerIds, random)
     const assignment = distributePlayerIds(shuffledIds, teamCount)
-    if (getAssignmentSignature(assignment) !== previousSignature) {
+    if (getTeamAssignmentSignature(assignment) !== previousSignature) {
       return { kind: 'success', assignment }
     }
   }

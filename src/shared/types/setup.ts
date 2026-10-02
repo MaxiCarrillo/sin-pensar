@@ -18,6 +18,10 @@ export interface TeamAssignment {
   teams: TeamMembership[]
 }
 
+export type AddPlayerResult =
+  | { kind: 'added'; player: Player }
+  | { kind: 'limit-reached' }
+
 export type RenamePlayerResult =
   | { kind: 'updated'; player: Player }
   | { kind: 'empty' }

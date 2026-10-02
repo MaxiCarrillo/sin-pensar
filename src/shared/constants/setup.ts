@@ -6,6 +6,7 @@ export const AVATAR_OPTIONS = avatarIds.map((id, index) => ({
 }))
 
 export const MAX_NAME_LENGTH = 16
+export const MAX_PLAYERS = 20
 export const MIN_PLAYERS = 4
 export const MIN_PLAYERS_PER_TEAM = 2
 

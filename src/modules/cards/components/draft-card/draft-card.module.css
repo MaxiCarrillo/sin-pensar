@@ -1,0 +1,159 @@
+.cardButton {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 490px;
+  padding: 0;
+  grid-template-rows: minmax(44px, auto) repeat(3, minmax(100px, auto)) minmax(118px, auto);
+  gap: 7px;
+  overflow: hidden;
+  border: 3px solid var(--color-text);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-control);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    opacity 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.cardButton:focus-visible {
+  z-index: 1;
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.cardButton:active:not(.ineligible) {
+  transform: scale(0.99);
+}
+
+.unselected {
+  opacity: 0.4;
+}
+
+.selectedMain,
+.selectedLightning {
+  opacity: 1;
+}
+
+.selectedMain {
+  border-color: var(--color-tertiary-dark);
+  box-shadow: 0 0 0 3px var(--color-tertiary), var(--shadow-control);
+}
+
+.selectedLightning {
+  border-color: var(--color-secondary-dark);
+  box-shadow: 0 0 0 3px var(--color-secondary), var(--shadow-control);
+}
+
+.ineligible {
+  cursor: not-allowed;
+}
+
+.selectionBadge {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  right: var(--space-sm);
+  max-width: calc(100% - 2 * var(--space-sm));
+  padding: 3px 8px;
+  border: 1px solid var(--color-text);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-extrabold);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.cardCap {
+  min-width: 0;
+  background: var(--color-surface);
+}
+
+.cardSection {
+  display: grid;
+  min-width: 0;
+  padding: var(--space-md) var(--space-sm) var(--space-sm);
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: var(--space-xs);
+}
+
+.titleSection {
+  color: var(--color-text-strong);
+  background: var(--color-secondary);
+}
+
+.characterSection {
+  color: var(--color-text-strong);
+  background: var(--color-tertiary);
+}
+
+.everythingSection {
+  color: var(--color-text-strong);
+  background: var(--color-primary);
+}
+
+.sectionSubtype,
+.keywordLabel {
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.sectionValue {
+  min-width: 0;
+  align-self: center;
+  padding-inline: var(--space-xs);
+  font-size: clamp(1.05rem, 6vw, 1.4rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.sectionSubtype {
+  min-width: 0;
+  justify-self: end;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.keywordSection {
+  align-content: center;
+  padding-block: var(--space-lg);
+  grid-template-rows: auto minmax(min-content, 1fr);
+  gap: var(--space-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.keywordLabel {
+  color: var(--color-text-muted);
+}
+
+.keywordValue {
+  color: var(--color-secondary);
+  font-size: clamp(1.35rem, 8vw, 1.8rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (max-width: 350px) {
+  .cardButton {
+    min-height: 470px;
+    grid-template-rows: minmax(40px, auto) repeat(3, minmax(96px, auto)) minmax(114px, auto);
+  }
+
+  .cardSection {
+    padding-inline: var(--space-xs);
+  }
+}
