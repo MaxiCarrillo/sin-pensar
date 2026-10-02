@@ -8,6 +8,7 @@
 - Shared bottom drawers keep their Ant Design mask and panel at viewport level while a centered child content container is capped to the mobile shell width.
 - The implemented palette is white with primary `#00AAB7`, secondary `#DE2C6E`, and tertiary `#11B087`. No dark algorithm is configured.
 - Spanish product copy, labeled icon controls, native avatar radios, status announcements, and non-color roster feedback are present. Automated browser accessibility and viewport tests are not configured.
+- Team assignment uses vertically stacked table-like cards with cycling semantic headers, one-column player rows, explicit remove-to-unassigned controls, and a shared bottom drawer for keyboard-accessible player selection. Team-count choices live in the Players configuration drawer and describe the balanced sizes produced by the finalized roster.
 
 ## Target rules
 

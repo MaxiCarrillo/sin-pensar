@@ -1,0 +1,311 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  padding: max(var(--space-md), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right)) max(var(--space-md), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-md);
+  overflow: hidden;
+  background: transparent;
+}
+
+@supports (height: 100dvh) {
+  .page {
+    height: 100dvh;
+  }
+}
+
+.page::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background:
+    radial-gradient(circle at 0 15%, rgba(0, 170, 183, 0.12), transparent 9rem),
+    var(--color-background);
+}
+
+.header {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  gap: var(--space-sm);
+}
+
+.header h1 {
+  margin: 0;
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 3px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.backButton {
+  min-width: 40px !important;
+  min-height: 40px !important;
+  background: var(--color-tertiary) !important;
+}
+
+.backButton:hover {
+  background: var(--color-tertiary-dark) !important;
+}
+
+.headerSpacer {
+  width: 40px;
+  height: 40px;
+}
+
+.main {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-sm);
+  overflow: hidden;
+}
+
+.assignmentStatus {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.actions button,
+.drawerContent > button,
+.assignButton {
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.teamsSection {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px var(--space-xs) var(--space-md) 3px;
+  grid-auto-rows: max-content;
+  gap: var(--space-md);
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--space-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.teamsSection :is(button, a, input):focus-visible {
+  scroll-margin-block: var(--space-md);
+}
+
+.teamCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-control);
+}
+
+.teamHeader {
+  display: flex;
+  min-height: 48px;
+  padding: var(--space-sm) var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  color: #fff;
+}
+
+.teamHeader h2 {
+  color: inherit;
+  font-size: var(--font-size-md);
+}
+
+.teamHeader span {
+  flex: 0 0 auto;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.teamPrimary {
+  background: var(--color-primary-dark);
+}
+
+.teamTertiary {
+  background: var(--color-tertiary-dark);
+}
+
+.teamSecondary {
+  background: var(--color-secondary-dark);
+}
+
+.teamPlayers,
+.playerPicker {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teamPlayers li {
+  display: flex;
+  min-height: 48px;
+  padding-left: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.teamPlayers li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-bold);
+}
+
+.removePlayerButton {
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  color: var(--color-secondary-dark) !important;
+}
+
+.emptyTeam {
+  padding: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.assignButton {
+  width: calc(100% - 2 * var(--space-md));
+  margin: var(--space-md);
+  white-space: normal;
+}
+
+.actions,
+.drawerContent {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-sm);
+}
+
+.actions {
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border);
+}
+
+.actions button {
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  padding-block: 2px;
+  white-space: normal;
+}
+
+.actionHelp {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.validStatus,
+.requirement {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.validStatus {
+  color: var(--color-tertiary-dark);
+}
+
+.requirement {
+  color: var(--color-secondary-dark);
+}
+
+.playerPicker {
+  display: grid;
+  max-height: min(48vh, 26rem);
+  max-height: min(48dvh, 26rem);
+  gap: var(--space-xs);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.playerOption {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-sm);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+  text-align: left;
+}
+
+.playerOption[aria-pressed='true'] {
+  border-width: 2px;
+  border-color: var(--color-primary-dark);
+  background: var(--color-surface-tinted);
+}
+
+.playerOptionText {
+  display: grid;
+  min-width: 0;
+}
+
+.playerOptionText strong {
+  overflow-wrap: anywhere;
+}
+
+.playerOptionText span,
+.selectionState {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.selectionState {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.playerOption[aria-pressed='true'] .selectionState {
+  color: var(--color-primary-dark);
+}
+
+@media (max-width: 350px) {
+  .page {
+    padding-inline: var(--space-sm);
+  }
+
+  .header h1 {
+    font-size: var(--font-size-md);
+    letter-spacing: 2px;
+  }
+
+}

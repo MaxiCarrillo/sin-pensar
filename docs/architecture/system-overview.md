@@ -11,7 +11,7 @@ Sin Pensar is a frontend-only React 19.2, TypeScript 6, and Vite 8 package. Its 
 - `src/modules` owns route pages and product components, with `modules/common` reserved for components shared across product modules.
 - `src/shared` owns reusable constants, types, and the focused setup store.
 
-`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, nickname, owner-player identity, and roster across `/` and `/players`; field values, drawers, and status messages remain local to their components. Only the validated, versioned `nickname` and `avatar` profile is persisted in local storage. The roster and owner-player identity remain transient, so `/players` redirects home when no committed roster exists after a reload.
+`App.tsx` only renders the route provider. `main.tsx` owns application providers. The setup store owns avatar, nickname, owner-player identity, roster, turn duration, main-deck card count, selected team count, and the committed ID-based team assignment across `/`, `/players`, and `/teams`; configuration and assignment drafts, player selection, drawers, and status messages remain local to their components. Valid team counts are derived dynamically from the finalized roster as every integer from 2 through `floor(playerCount / 2)`. The Teams route edits a local draft that may be incomplete, commits only complete balanced membership, and can immediately commit injected-random balanced draws. Only the validated, versioned `nickname` and `avatar` profile is persisted in local storage. All other setup values remain transient, so protected setup routes redirect home when no committed owner roster exists after a reload.
 
 ## Target boundaries
 

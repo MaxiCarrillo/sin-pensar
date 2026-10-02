@@ -5,32 +5,41 @@ import {
   QuestionOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Button, Divider, Input, Tooltip, type InputRef } from 'antd'
-import { useRef, useState, type FormEvent } from 'react'
+import { Button, Divider, Input, Radio, Tooltip, type InputRef } from 'antd'
+import { useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
-import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 
 import { AppDrawer } from '@/modules/common'
-import { MAX_NAME_LENGTH, MIN_PLAYERS } from '@/shared/constants/setup'
+import {
+  isMainDeckCardCount,
+  isTurnDuration,
+  MAIN_DECK_CARD_OPTIONS,
+  MAX_NAME_LENGTH,
+  MIN_PLAYERS,
+  TURN_DURATION_OPTIONS,
+} from '@/shared/constants/setup'
+import {
+  deriveBalancedTeamSizes,
+  deriveValidTeamCounts,
+  isRosterValid,
+  isValidTeamCount,
+  normalizePlayerName,
+} from '@/shared/domain/setup'
 import { useSetupStore } from '@/shared/store/setup.store'
-import type { Player } from '@/shared/types/setup'
+import type { Player, TeamCount } from '@/shared/types/setup'
 
 import styles from './players.module.css'
 
 const EMPTY_NAME_MESSAGE = 'El nombre no puede estar vacío'
 
-function normalizeName(name: string) {
-  return name.trim().toLocaleLowerCase('es')
-}
-
 function getDuplicateName(players: Player[], playerId: string | null, name: string) {
   const trimmedName = name.trim()
   if (!trimmedName) return undefined
 
-  const normalizedName = normalizeName(trimmedName)
+  const normalizedName = normalizePlayerName(trimmedName)
   return players.some(
-    (player) => player.id !== playerId && normalizeName(player.name) === normalizedName,
+    (player) => player.id !== playerId && normalizePlayerName(player.name) === normalizedName,
   )
     ? `${trimmedName} ya está en la lista.`
     : undefined
@@ -47,29 +56,63 @@ function getMissingPlayersMessage(missingPlayers: number) {
     : `Se necesitan al menos ${missingPlayers} jugadores más.`
 }
 
+function formatTeamSizes(sizes: number[]) {
+  if (sizes.length < 2) return sizes.join('')
+  return `${sizes.slice(0, -1).join(', ')} y ${sizes.at(-1)}`
+}
+
+function getTeamCountLabel(playerCount: number, teamCount: TeamCount) {
+  const sizes = deriveBalancedTeamSizes(playerCount, teamCount)
+  return `${teamCount} equipos · ${formatTeamSizes(sizes)} jugadores`
+}
+
 function PlayersPage() {
   const navigate = useNavigate()
-  const { nickname, players, addPlayer, removePlayer, renamePlayer } = useSetupStore(
+  const {
+    nickname,
+    players,
+    turnDuration,
+    mainDeckCardCount,
+    teamCount,
+    addPlayer,
+    removePlayer,
+    renamePlayer,
+    setTurnDuration,
+    setMainDeckCardCount,
+    setTeamCount,
+  } = useSetupStore(
     useShallow((state) => ({
       nickname: state.nickname,
       players: state.players,
+      turnDuration: state.turnDuration,
+      mainDeckCardCount: state.mainDeckCardCount,
+      teamCount: state.teamCount,
       addPlayer: state.addPlayer,
       removePlayer: state.removePlayer,
       renamePlayer: state.renamePlayer,
+      setTurnDuration: state.setTurnDuration,
+      setMainDeckCardCount: state.setMainDeckCardCount,
+      setTeamCount: state.setTeamCount,
     })),
   )
-  const [name, setName] = useState('')
-  const [newNameTouched, setNewNameTouched] = useState(false)
   const [playerDrafts, setPlayerDrafts] = useState<Record<string, string>>(() =>
     Object.fromEntries(players.map((player) => [player.id, player.name])),
   )
   const [helpOpen, setHelpOpen] = useState(false)
-  const inputRef = useRef<InputRef>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [durationDraft, setDurationDraft] = useState(turnDuration)
+  const [cardCountDraft, setCardCountDraft] = useState(mainDeckCardCount)
+  const [teamCountDraft, setTeamCountDraft] = useState<TeamCount>(teamCount)
+  const inputRefs = useRef<Record<string, InputRef | null>>({})
   const missingPlayers = Math.max(MIN_PLAYERS - players.length, 0)
+  const draftPlayers = players.map((player) => ({
+    ...player,
+    name: playerDrafts[player.id] ?? player.name,
+  }))
   const playerErrors = Object.fromEntries(
-    players.map((player) => {
+    draftPlayers.map((player) => {
       const draft = playerDrafts[player.id] ?? player.name
-      return [player.id, getNameError(players, player.id, draft)]
+      return [player.id, getNameError(draftPlayers, player.id, draft)]
     }),
   )
   const hasInvalidDraft = Object.values(playerErrors).some(Boolean)
@@ -77,7 +120,8 @@ function PlayersPage() {
     (player) => (playerDrafts[player.id] ?? player.name) !== player.name,
   )
   const canBuildTeams = missingPlayers === 0 && !hasInvalidDraft && !hasUncommittedDraft
-  const newNameError = newNameTouched ? getNameError(players, null, name) : undefined
+  const hasFinalizedRoster = canBuildTeams && isRosterValid(players)
+  const validTeamCounts = hasFinalizedRoster ? deriveValidTeamCounts(players.length) : []
   const teamValidationMessage = missingPlayers
     ? getMissingPlayersMessage(missingPlayers)
     : hasInvalidDraft
@@ -90,25 +134,10 @@ function PlayersPage() {
     return <Navigate to="/" replace />
   }
 
-  const handleAdd = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setNewNameTouched(true)
-    const result = addPlayer(name)
-
-    if (result.kind === 'empty') {
-      inputRef.current?.focus()
-      return
-    }
-
-    if (result.kind === 'duplicate') {
-      inputRef.current?.focus()
-      return
-    }
-
-    setPlayerDrafts((drafts) => ({ ...drafts, [result.player.id]: result.player.name }))
-    setName('')
-    setNewNameTouched(false)
-    inputRef.current?.focus()
+  const handleAdd = () => {
+    const player = addPlayer()
+    setPlayerDrafts((drafts) => ({ ...drafts, [player.id]: player.name }))
+    requestAnimationFrame(() => inputRefs.current[player.id]?.focus())
   }
 
   const handleRemove = (player: Player) => {
@@ -133,6 +162,20 @@ function PlayersPage() {
       ...drafts,
       [player.id]: result.player.name,
     }))
+  }
+
+  const handleOpenSettings = () => {
+    setDurationDraft(turnDuration)
+    setCardCountDraft(mainDeckCardCount)
+    setTeamCountDraft(teamCount)
+    setSettingsOpen(true)
+  }
+
+  const handleSaveSettings = () => {
+    setTurnDuration(durationDraft)
+    setMainDeckCardCount(cardCountDraft)
+    if (isValidTeamCount(players.length, teamCountDraft)) setTeamCount(teamCountDraft)
+    setSettingsOpen(false)
   }
 
   return (
@@ -172,18 +215,84 @@ function PlayersPage() {
         <p className={styles.helpContent}>Las instrucciones detalladas se agregarán próximamente.</p>
       </AppDrawer>
 
+      <AppDrawer
+        open={settingsOpen}
+        title="Configuración"
+        description="Elegí cómo se preparará la partida."
+        onClose={() => setSettingsOpen(false)}
+      >
+        <div className={styles.settingsContent}>
+          <fieldset className={styles.settingsGroup}>
+            <legend>Tiempo por turno</legend>
+            <Radio.Group
+              block
+              name="turn-duration"
+              options={[...TURN_DURATION_OPTIONS]}
+              value={durationDraft}
+              onChange={(event) => {
+                if (isTurnDuration(event.target.value)) setDurationDraft(event.target.value)
+              }}
+            />
+          </fieldset>
+          <fieldset className={styles.settingsGroup}>
+            <legend>Cartas para el mazo principal</legend>
+            <Radio.Group
+              block
+              name="main-deck-card-count"
+              options={[...MAIN_DECK_CARD_OPTIONS]}
+              value={cardCountDraft}
+              onChange={(event) => {
+                if (isMainDeckCardCount(event.target.value)) {
+                  setCardCountDraft(event.target.value)
+                }
+              }}
+            />
+          </fieldset>
+          <fieldset className={styles.settingsGroup}>
+            <legend>Cantidad de equipos</legend>
+            {validTeamCounts.length > 0 ? (
+              <Radio.Group
+                className={styles.teamCountOptions}
+                name="team-count"
+                options={validTeamCounts.map((count) => ({
+                  value: count,
+                  label: getTeamCountLabel(players.length, count),
+                }))}
+                value={teamCountDraft}
+                onChange={(event) => {
+                  if (isValidTeamCount(players.length, event.target.value)) {
+                    setTeamCountDraft(event.target.value)
+                  }
+                }}
+              />
+            ) : (
+              <p className={styles.settingsRequirement} role="status">
+                Las opciones de equipos estarán disponibles cuando completes una lista válida de
+                al menos 4 jugadores, sin nombres vacíos ni repetidos.
+              </p>
+            )}
+          </fieldset>
+          <Button type="primary" size="large" block onClick={handleSaveSettings}>
+            Guardar configuración
+          </Button>
+        </div>
+      </AppDrawer>
+
       <main className={styles.main}>
-        <form className={styles.form} onSubmit={handleAdd} noValidate>
+        <div className={styles.form}>
           <div className={styles.entryArea}>
             <ul className={styles.playerList} aria-label="Jugadores">
               {players.map((player) => (
                 <li key={player.id} className={styles.playerRow}>
                   <div className={styles.playerField}>
                     <label className="visually-hidden" htmlFor={`player-${player.id}`}>
-                      Nombre de {player.name}
+                      {player.name ? `Nombre de ${player.name}` : 'Nombre del nuevo jugador'}
                     </label>
                     <Input
                       allowClear
+                      ref={(input) => {
+                        inputRefs.current[player.id] = input
+                      }}
                       className={styles.playerInput}
                       id={`player-${player.id}`}
                       name={`player-${player.id}`}
@@ -214,12 +323,12 @@ function PlayersPage() {
                       </span>
                     ) : null}
                   </div>
-                  <Tooltip title={`Eliminar a ${player.name}`}>
+                  <Tooltip title={player.name ? `Eliminar a ${player.name}` : 'Eliminar jugador vacío'}>
                     <Button
                       className={styles.removeButton}
                       size="large"
                       icon={<MinusCircleOutlined />}
-                      aria-label={`Eliminar a ${player.name}`}
+                      aria-label={player.name ? `Eliminar a ${player.name}` : 'Eliminar jugador vacío'}
                       htmlType="button"
                       onClick={() => handleRemove(player)}
                     />
@@ -228,41 +337,14 @@ function PlayersPage() {
               ))}
             </ul>
 
-            <div className={styles.playerField}>
-              <label className="visually-hidden" htmlFor="player-name">Nombre del jugador</label>
-              <Input
-                allowClear
-                ref={inputRef}
-                className={styles.playerInput}
-                id="player-name"
-                name="player-name"
-                size="large"
-                value={name}
-                maxLength={MAX_NAME_LENGTH}
-                autoComplete="off"
-                placeholder="Ingresar nombre"
-                prefix={<UserOutlined />}
-                showCount
-                status={newNameError ? 'error' : undefined}
-                required
-                aria-describedby={newNameError ? 'new-player-error' : undefined}
-                aria-invalid={newNameError ? true : undefined}
-                onBlur={() => setNewNameTouched(true)}
-                onChange={(event) => setName(event.target.value)}
-              />
-              {newNameError ? (
-                <span id="new-player-error" className={styles.validationMessage} role="alert">
-                  {newNameError}
-                </span>
-              ) : null}
-            </div>
             <Button
               className={styles.addButton}
-              htmlType="submit"
+              htmlType="button"
               type="dashed"
               size="large"
               icon={<PlusOutlined />}
               block
+              onClick={handleAdd}
             >
               Agregar jugador
             </Button>
@@ -279,7 +361,9 @@ function PlayersPage() {
               className={styles.settingsButton}
               size="large"
               htmlType="button"
-              onClick={() => toast.info('La configuración estará disponible próximamente.')}
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
+              onClick={handleOpenSettings}
             >
               Configuración
             </Button>
@@ -292,14 +376,14 @@ function PlayersPage() {
                   htmlType="button"
                   disabled={!canBuildTeams}
                   aria-describedby={teamValidationMessage ? 'team-requirement' : undefined}
-                  onClick={() => toast.info('La creación de equipos estará disponible próximamente.')}
+                  onClick={() => navigate('/teams')}
                 >
                   Armar equipos
                 </Button>
               </span>
             </Tooltip>
           </footer>
-        </form>
+        </div>
       </main>
     </div>
   )

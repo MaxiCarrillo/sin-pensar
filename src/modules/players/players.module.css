@@ -190,6 +190,59 @@
   color: var(--color-text-muted);
 }
 
+.settingsContent {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.settingsGroup {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-sm);
+  border: 0;
+}
+
+.settingsGroup legend {
+  padding: 0;
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.settingsGroup label {
+  display: inline-flex;
+  min-height: 40px;
+  padding-inline: var(--space-xs) !important;
+  align-items: center;
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.settingsContent > button {
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.teamCountOptions {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.teamCountOptions label {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.settingsRequirement {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
 @media (max-width: 350px) {
   .page {
     padding-inline: var(--space-sm);
