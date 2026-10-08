@@ -11,7 +11,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "verify:card-draft": "node scripts/verify-card-draft.mjs"
+    "verify:card-draft": "node scripts/verify-card-draft.mjs",
+    "verify:gameplay": "node scripts/verify-gameplay.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",

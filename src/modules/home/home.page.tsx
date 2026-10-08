@@ -13,17 +13,17 @@ import styles from './home.module.css'
 
 function HomePage() {
   const navigate = useNavigate()
-  const { avatar, nickname, initializeProfile, setAvatar, setNickname } = useSetupStore(
+  const { avatar, nickname, initializeProfile, setAvatar } = useSetupStore(
     useShallow((state) => ({
       avatar: state.avatar,
       nickname: state.nickname,
       initializeProfile: state.initializeProfile,
       setAvatar: state.setAvatar,
-      setNickname: state.setNickname,
     })),
   )
   const [contactOpen, setContactOpen] = useState(false)
-  const trimmedNickname = nickname.trim()
+  const [nicknameDraft, setNicknameDraft] = useState(() => nickname)
+  const trimmedNickname = nicknameDraft.trim()
   const canPlay = trimmedNickname.length > 0
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -65,9 +65,9 @@ function HomePage() {
           <form className={styles.form} onSubmit={handleSubmit}>
             <AvatarInput
               avatar={avatar}
-              nickname={nickname}
+              nickname={nicknameDraft}
               onAvatarChange={setAvatar}
-              onNicknameChange={setNickname}
+              onNicknameChange={setNicknameDraft}
               maxLength={MAX_NAME_LENGTH}
             />
 

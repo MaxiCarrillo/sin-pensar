@@ -26,8 +26,8 @@ import {
   getTeamAssignmentSignature,
   isRosterValid,
   isValidTeamCount,
-  normalizeTeamCount,
   normalizePlayerName,
+  normalizeTeamCount,
   type TeamAssignmentValidation,
   validateTeamAssignment,
 } from '@/shared/domain/setup'
@@ -35,6 +35,8 @@ import {
   SETUP_PROFILE_DEFAULTS,
   setupProfileSchema,
 } from '@/shared/schemas/setup-profile.schema'
+import { useGameplayStore } from '@/shared/store/gameplay.store'
+import { replaceProfileIdentity } from '@/shared/store/profile-identity.actions'
 import type {
   CardDraftSession,
   CardDraftStartResult,
@@ -84,7 +86,6 @@ interface SetupState {
   teamAssignment: TeamAssignment
   cardDraft: CardDraftSession | null
   setAvatar: (avatar: AvatarId) => void
-  setNickname: (nickname: string) => void
   initializeProfile: (nickname: string) => void
   addPlayer: () => AddPlayerResult
   renamePlayer: (playerId: string, name: string) => RenamePlayerResult
@@ -104,6 +105,7 @@ interface SetupState {
   editMainCards: () => CardDraftTransitionResult
   toggleLightningCard: (cardId: CardId) => CardDraftTransitionResult
   saveCurrentPlayerDraft: () => CardDraftTransitionResult
+  clearCardDraft: () => void
 }
 
 let playerSequence = 0
@@ -127,6 +129,10 @@ function getDraftSetupKey(state: SetupState) {
   })
 }
 
+function resetGameplay() {
+  useGameplayStore.getState().resetGameplay()
+}
+
 export const useSetupStore = create<SetupState>()(
   persist(
     (set, get) => ({
@@ -139,26 +145,31 @@ export const useSetupStore = create<SetupState>()(
       teamAssignment: { teams: [] },
       cardDraft: null,
       setAvatar: (avatar) => set({ avatar }),
-      setNickname: (nickname) => set({ nickname }),
       initializeProfile: (nickname) => {
         const trimmedNickname = nickname.trim()
         if (!trimmedNickname) return
 
         const ownerPlayer = createPlayer(trimmedNickname)
-        set({
-          nickname: trimmedNickname,
-          players: [ownerPlayer],
-          ownerPlayerId: ownerPlayer.id,
-          turnDuration: DEFAULT_TURN_DURATION,
-          mainDeckCardCount: DEFAULT_MAIN_DECK_CARD_COUNT,
-          teamCount: DEFAULT_TEAM_COUNT,
-          teamAssignment: { teams: [] },
-          cardDraft: null,
-        })
+        replaceProfileIdentity(
+          {
+            nickname: trimmedNickname,
+            ownerPlayer,
+            defaults: {
+              turnDuration: DEFAULT_TURN_DURATION,
+              mainDeckCardCount: DEFAULT_MAIN_DECK_CARD_COUNT,
+              teamCount: DEFAULT_TEAM_COUNT,
+            },
+          },
+          {
+            resetGameplay,
+            replaceSetup: (profileIdentity) => set(profileIdentity),
+          },
+        )
       },
       addPlayer: () => {
         if (get().players.length >= MAX_PLAYERS) return { kind: 'limit-reached' }
         const player = createPlayer('')
+        resetGameplay()
         set((state) => ({
           players: [...state.players, player],
           teamAssignment: { teams: [] },
@@ -192,6 +203,7 @@ export const useSetupStore = create<SetupState>()(
           teamCount,
           teamAssignment,
         )
+        resetGameplay()
         set({
           players: nextPlayers,
           teamAssignment:
@@ -204,6 +216,8 @@ export const useSetupStore = create<SetupState>()(
         return { kind: 'updated', player }
       },
       removePlayer: (playerId) => {
+        if (!get().players.some((player) => player.id === playerId)) return
+        resetGameplay()
         set((state) => {
           const players = state.players.filter((player) => player.id !== playerId)
           const teamCount = normalizeTeamCount(players.length, state.teamCount)
@@ -216,17 +230,21 @@ export const useSetupStore = create<SetupState>()(
           }
         })
       },
-      setTurnDuration: (turnDuration) => set({ turnDuration }),
-      setMainDeckCardCount: (mainDeckCardCount) =>
-        set((state) =>
-          state.mainDeckCardCount === mainDeckCardCount
-            ? {}
-            : { mainDeckCardCount, cardDraft: null },
-        ),
+      setTurnDuration: (turnDuration) => {
+        if (get().turnDuration === turnDuration) return
+        resetGameplay()
+        set({ turnDuration })
+      },
+      setMainDeckCardCount: (mainDeckCardCount) => {
+        if (get().mainDeckCardCount === mainDeckCardCount) return
+        resetGameplay()
+        set({ mainDeckCardCount, cardDraft: null })
+      },
       setTeamCount: (teamCount) => {
         const { players, teamCount: currentTeamCount } = get()
         if (!isValidTeamCount(players.length, teamCount)) return
         if (teamCount === currentTeamCount) return
+        resetGameplay()
         set({
           teamCount,
           teamAssignment: getBalancedAssignment(players, teamCount),
@@ -243,6 +261,7 @@ export const useSetupStore = create<SetupState>()(
         ) {
           return validation
         }
+        resetGameplay()
         set({
           teamAssignment: {
             teams: assignment.teams.map((team) => ({
@@ -277,6 +296,7 @@ export const useSetupStore = create<SetupState>()(
           getCardDraftSessionErrors(
             state.cardDraft,
             setupKey,
+            state.mainDeckCardCount,
             state.players.map((player) => player.id),
             cardIds,
           ).length === 0
@@ -292,6 +312,7 @@ export const useSetupStore = create<SetupState>()(
           random,
         )
         if (creation.kind === 'rejected') return creation
+        resetGameplay()
         set({ cardDraft: creation.session })
         return { kind: 'started', session: creation.session }
       },
@@ -343,6 +364,10 @@ export const useSetupStore = create<SetupState>()(
         const result = saveCardDraftPlayer(current)
         if (result.kind === 'success') set({ cardDraft: result.session })
         return result
+      },
+      clearCardDraft: () => {
+        resetGameplay()
+        set({ cardDraft: null })
       },
     }),
     {

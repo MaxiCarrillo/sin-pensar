@@ -1,0 +1,361 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  padding: max(var(--space-md), env(safe-area-inset-top)) max(var(--space-md), env(safe-area-inset-right)) max(var(--space-md), env(safe-area-inset-bottom)) max(var(--space-md), env(safe-area-inset-left));
+  overflow: hidden;
+}
+
+.page::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: var(--color-background);
+}
+
+.activePage {
+  --timer-progress: 0%;
+  --stage-color: var(--color-primary);
+}
+
+.activePage::before {
+  background: linear-gradient(
+    to top,
+    var(--stage-color) 0 var(--timer-progress),
+    var(--color-background) var(--timer-progress) 100%
+  );
+}
+
+.timeoutPage::before {
+  background: var(--color-secondary);
+}
+
+.gameCompletePage::before {
+  background: var(--color-primary);
+}
+
+@supports (height: 100dvh) {
+  .page {
+    height: 100dvh;
+  }
+}
+
+.handoff,
+.terminalState,
+.scrollableState,
+.activeTurn {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.handoff,
+.terminalState {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-lg);
+}
+
+.handoffContent,
+.terminalContent,
+.centeredState {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-md);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  text-align: center;
+}
+
+.turnLabel {
+  font-size: var(--font-size-2xl);
+  line-height: 1.1;
+}
+
+.handoff h1 {
+  max-width: 100%;
+  font-size: clamp(2.35rem, 13vw, 3.4rem);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.privacyInstruction {
+  max-width: 20rem;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+
+.stageSummary {
+  display: grid;
+  min-width: min(16rem, 100%);
+  padding: var(--space-sm) var(--space-md);
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-tinted);
+  box-shadow: var(--shadow-control);
+}
+
+.stageLabel,
+.activeStage {
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: 0.08em;
+}
+
+.stageSummary strong {
+  font-size: var(--font-size-lg);
+}
+
+.stageSummary span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.turnSummary {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: var(--space-xs);
+}
+
+.turnSummary div {
+  min-width: 0;
+  padding: var(--space-xs);
+  border-top: 2px solid var(--color-border);
+}
+
+.turnSummary dt {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.turnSummary dd {
+  margin: 2px 0 0;
+  font-weight: var(--font-weight-extrabold);
+  overflow-wrap: anywhere;
+}
+
+.bottomButton,
+.resultActions button {
+  min-height: 52px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-extrabold);
+  white-space: normal;
+}
+
+.activeTurn {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+}
+
+.activeHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid color-mix(in srgb, var(--color-text) 18%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.activeHeader > div {
+  min-width: 0;
+}
+
+.activeStage,
+.activeTeam {
+  overflow-wrap: anywhere;
+}
+
+.activeTeam {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.timer {
+  flex: 0 0 auto;
+  font-size: var(--font-size-lg);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-extrabold);
+}
+
+.cardViewport {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.status {
+  min-height: 1rem;
+  color: var(--color-text);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.terminalContent {
+  color: var(--color-text-strong);
+}
+
+.terminalContent h1 {
+  max-width: 100%;
+  font-size: clamp(2.7rem, 15vw, 4rem);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 0.92;
+  overflow-wrap: anywhere;
+}
+
+.terminalContent p,
+.terminalContent span {
+  font-weight: var(--font-weight-bold);
+  text-align: center;
+}
+
+.timeoutButton {
+  border-color: var(--color-surface);
+  color: var(--color-secondary-dark);
+  background: var(--color-surface);
+}
+
+.timeoutButton:hover,
+.timeoutButton:focus-visible {
+  border-color: var(--color-surface) !important;
+  color: var(--color-secondary-dark) !important;
+  background: var(--color-surface) !important;
+}
+
+.gameCompletePage .terminalContent {
+  color: var(--color-text-strong);
+}
+
+.gameCompleteButton {
+  border-color: var(--color-surface);
+  color: var(--color-primary-dark);
+  background: var(--color-surface);
+}
+
+.gameCompleteButton:hover,
+.gameCompleteButton:focus-visible {
+  border-color: var(--color-surface) !important;
+  color: var(--color-primary-dark) !important;
+  background: var(--color-surface) !important;
+}
+
+.scrollableState {
+  display: flex;
+  padding-block: var(--space-sm);
+  align-items: center;
+  justify-content: center;
+  justify-content: safe center;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  text-align: center;
+}
+
+.stateCopy {
+  display: grid;
+  width: 100%;
+  gap: var(--space-sm);
+}
+
+.stateCopy h1,
+.centeredState h1 {
+  font-size: var(--font-size-2xl);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.stateCopy > p:not(.stageLabel),
+.centeredState > p:not(.stageLabel) {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.scoreTable {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-collapse: separate;
+  border-radius: var(--radius-sm);
+  border-spacing: 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-control);
+  text-align: left;
+}
+
+.scoreTable th,
+.scoreTable td {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere;
+}
+
+.scoreTable thead th {
+  color: var(--color-primary-dark);
+  background: var(--color-surface-tinted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+}
+
+.scoreTable th:last-child,
+.scoreTable td:last-child {
+  width: 5rem;
+  text-align: right;
+}
+
+.scoreTable tbody tr:last-child th,
+.scoreTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.winnerNames {
+  color: var(--color-secondary-dark) !important;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-extrabold) !important;
+  overflow-wrap: anywhere;
+}
+
+.resultActions {
+  display: grid;
+  width: 100%;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 350px) {
+  .page {
+    padding-inline: var(--space-sm);
+  }
+
+  .handoff h1 {
+    font-size: clamp(2.1rem, 12vw, 2.8rem);
+  }
+
+  .turnSummary {
+    grid-template-columns: 1.25fr 1fr 1fr;
+  }
+}

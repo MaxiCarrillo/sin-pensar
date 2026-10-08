@@ -131,6 +131,7 @@ export function createCardDraftSession(
 export function getCardDraftSessionErrors(
   session: CardDraftSession,
   expectedSetupKey: string,
+  expectedMainDeckCardCount: MainDeckCardCount,
   expectedPlayerIds: readonly string[],
   catalogCardIds: readonly CardId[],
 ): string[] {
@@ -140,6 +141,12 @@ export function getCardDraftSessionErrors(
 
   if (session.setupKey !== expectedSetupKey) errors.push('setup-key')
   if (!isMainDeckCardCount(session.mainDeckCardCount)) errors.push('main-count')
+  if (
+    !isMainDeckCardCount(expectedMainDeckCardCount) ||
+    session.mainDeckCardCount !== expectedMainDeckCardCount
+  ) {
+    errors.push('main-count-mismatch')
+  }
   if (!Object.values(CARD_DRAFT_PHASES).some((phase) => phase === session.phase)) {
     errors.push('phase')
   }

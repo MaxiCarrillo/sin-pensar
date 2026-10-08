@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 
 import CardsPage from '@/modules/cards/cards.page'
+import GamePage from '@/modules/game/game.page'
 import HomePage from '@/modules/home/home.page'
 import PlayersPage from '@/modules/players/players.page'
 import TeamsPage from '@/modules/teams/teams.page'
@@ -13,6 +14,7 @@ function RoutesProvider() {
         <Route path="/players" element={<PlayersPage />} />
         <Route path="/teams" element={<TeamsPage />} />
         <Route path="/cards" element={<CardsPage />} />
+        <Route path="/game" element={<GamePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

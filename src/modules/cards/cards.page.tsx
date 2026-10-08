@@ -15,6 +15,7 @@ import {
   isRosterValid,
   validateTeamAssignment,
 } from '@/shared/domain/setup'
+import { useGameplayStore } from '@/shared/store/gameplay.store'
 import { useSetupStore } from '@/shared/store/setup.store'
 import { CARD_DRAFT_PHASES, type CardId } from '@/shared/types/card-draft'
 
@@ -27,6 +28,7 @@ function CardsPage() {
     nickname,
     ownerPlayerId,
     players,
+    turnDuration,
     mainDeckCardCount,
     teamCount,
     teamAssignment,
@@ -42,6 +44,7 @@ function CardsPage() {
       nickname: state.nickname,
       ownerPlayerId: state.ownerPlayerId,
       players: state.players,
+      turnDuration: state.turnDuration,
       mainDeckCardCount: state.mainDeckCardCount,
       teamCount: state.teamCount,
       teamAssignment: state.teamAssignment,
@@ -54,6 +57,7 @@ function CardsPage() {
       saveCurrentPlayerDraft: state.saveCurrentPlayerDraft,
     })),
   )
+  const initializeGameplay = useGameplayStore((state) => state.initializeGameplay)
   const [revealedPlayerIndex, setRevealedPlayerIndex] = useState<number | null>(null)
   const [feedback, setFeedback] = useState('')
 
@@ -79,6 +83,7 @@ function CardsPage() {
       ? getCardDraftSessionErrors(
           cardDraft,
           setupKey,
+          mainDeckCardCount,
           players.map((player) => player.id),
           CARD_IDS,
         )
@@ -91,6 +96,28 @@ function CardsPage() {
   }
 
   if (cardDraft.phase === CARD_DRAFT_PHASES.complete) {
+    const handleStartGameplay = () => {
+      const result = initializeGameplay(
+        {
+          ownerPlayerId,
+          players,
+          turnDuration,
+          mainDeckCardCount,
+          teamCount,
+          teamAssignment,
+          cardDraft,
+          knownCardIds: CARD_IDS,
+        },
+        Math.random,
+      )
+      if (result.kind === 'rejected') {
+        setFeedback('No se pudo iniciar una partida con la configuración actual.')
+        return
+      }
+      setFeedback('')
+      navigate('/game')
+    }
+
     return (
       <main className={styles.page}>
         <section className={styles.completion} aria-labelledby="draft-complete-title">
@@ -99,16 +126,21 @@ function CardsPage() {
             <p className={styles.eyebrow}>SELECCIÓN COMPLETA</p>
             <h1 id="draft-complete-title">Las cartas están listas</h1>
             <p>
-              Todos guardaron sus cartas privadas. Volvé a la preparación sin mostrar ninguna
-              selección.
+              Todos guardaron sus cartas privadas. El juego comenzará con un pase seguro del
+              dispositivo.
             </p>
+            {feedback ? (
+              <p className={styles.handoffError} role="alert">
+                {feedback}
+              </p>
+            ) : null}
           </div>
           <div className={styles.completionActions}>
-            <Button type="primary" size="large" block onClick={() => navigate('/teams')}>
-              Volver a equipos
+            <Button type="primary" size="large" block onClick={handleStartGameplay}>
+              Comenzar partida
             </Button>
-            <Button size="large" block onClick={() => navigate('/')}>
-              Ir al inicio
+            <Button size="large" block onClick={() => navigate('/teams')}>
+              Volver a equipos
             </Button>
           </div>
         </section>

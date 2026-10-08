@@ -106,7 +106,7 @@ function createEmptyMemberships(teamCount: TeamCount): TeamMembership[] {
 
 export function getTeamAssignmentSignature(assignment: TeamAssignment) {
   return assignment.teams
-    .map((team) => `${team.teamId}:${[...team.playerIds].sort().join(',')}`)
+    .map((team) => `${team.teamId}:${team.playerIds.join(',')}`)
     .join('|')
 }
 

@@ -1,21 +1,21 @@
 .cardButton {
   position: relative;
   display: grid;
+  box-sizing: border-box;
   width: 100%;
   min-height: 490px;
   padding: 0;
   grid-template-rows: minmax(44px, auto) repeat(3, minmax(100px, auto)) minmax(118px, auto);
-  gap: 7px;
+  gap: var(--space-card-band-gutter);
   overflow: hidden;
-  border: 3px solid var(--color-text);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-control);
+  border: 0;
+  border-radius: var(--radius-card-face);
+  background: var(--color-card-surface);
+  box-shadow: var(--shadow-card-face);
   cursor: pointer;
   text-align: left;
   transition:
     opacity 160ms ease,
-    border-color 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
 }
@@ -37,16 +37,7 @@
 .selectedMain,
 .selectedLightning {
   opacity: 1;
-}
-
-.selectedMain {
-  border-color: var(--color-tertiary-dark);
-  box-shadow: 0 0 0 3px var(--color-tertiary), var(--shadow-control);
-}
-
-.selectedLightning {
-  border-color: var(--color-secondary-dark);
-  box-shadow: 0 0 0 3px var(--color-secondary), var(--shadow-control);
+  box-shadow: var(--shadow-card-selected);
 }
 
 .ineligible {
@@ -73,43 +64,47 @@
 
 .cardCap {
   min-width: 0;
-  background: var(--color-surface);
+  background: var(--color-card-surface);
 }
 
 .cardSection {
+  position: relative;
   display: grid;
   min-width: 0;
-  padding: var(--space-md) var(--space-sm) var(--space-sm);
-  grid-template-rows: minmax(min-content, 1fr) auto;
-  gap: var(--space-xs);
+  padding: var(--space-sm);
+  place-items: center;
+}
+
+.titleSection,
+.characterSection,
+.everythingSection {
+  color: var(--color-card-band-text);
 }
 
 .titleSection {
-  color: var(--color-text-strong);
-  background: var(--color-secondary);
+  background: var(--color-card-band-title);
 }
 
 .characterSection {
-  color: var(--color-text-strong);
-  background: var(--color-tertiary);
+  background: var(--color-card-band-character);
 }
 
 .everythingSection {
-  color: var(--color-text-strong);
-  background: var(--color-primary);
+  background: var(--color-card-band-everything);
 }
 
 .sectionSubtype,
 .keywordLabel {
   font-size: 0.6875rem;
-  font-weight: var(--font-weight-extrabold);
-  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-bold);
+  /* letter-spacing: 0.05em; */
   line-height: 1.2;
 }
 
 .sectionValue {
   min-width: 0;
   align-self: center;
+  justify-self: stretch;
   padding-inline: var(--space-xs);
   font-size: clamp(1.05rem, 6vw, 1.4rem);
   line-height: 1.08;
@@ -119,26 +114,32 @@
 }
 
 .sectionSubtype {
+  position: absolute;
+  right: var(--space-sm);
+  bottom: var(--space-sm);
   min-width: 0;
-  justify-self: end;
+  max-width: calc(100% - var(--space-sm) - var(--space-sm));
   overflow-wrap: anywhere;
   text-align: right;
 }
 
 .keywordSection {
   align-content: center;
+  justify-items: center;
   padding-block: var(--space-lg);
   grid-template-rows: auto minmax(min-content, 1fr);
-  gap: var(--space-sm);
-  color: var(--color-text);
-  background: var(--color-surface);
+  /* gap: var(--space-sm); */
+  background: var(--color-card-surface);
+  text-align: center;
 }
 
 .keywordLabel {
-  color: var(--color-text-muted);
+  color: var(--color-card-keyword-muted);
+  text-align: center;
 }
 
 .keywordValue {
+  width: 100%;
   color: var(--color-secondary);
   font-size: clamp(1.35rem, 8vw, 1.8rem);
   line-height: 1.1;

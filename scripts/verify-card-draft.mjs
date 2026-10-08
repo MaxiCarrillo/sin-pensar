@@ -34,27 +34,23 @@ function expectRejected(result, reason) {
   assert.deepEqual(result, { kind: 'rejected', reason })
 }
 
-function getRelativeLuminance(hexColor) {
-  const compactHex = hexColor.slice(1)
-  const expandedHex =
-    compactHex.length === 3
-      ? [...compactHex].map((character) => `${character}${character}`).join('')
-      : compactHex
-  assert.match(expandedHex, /^[\da-f]{6}$/i)
-
-  const channels = [0, 2, 4]
-    .map((offset) => Number.parseInt(expandedHex.slice(offset, offset + 2), 16) / 255)
-    .map((channel) =>
-      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-    )
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
+function getRootTokens(source) {
+  const rootBlock = source.match(/:root\s*\{([\s\S]*?)\}/)
+  assert.ok(rootBlock)
+  return new Map(
+    [...rootBlock[1].matchAll(/^\s*(--[\w-]+)\s*:\s*([^;]+);/gm)].map(
+      ([, token, value]) => [token, value.trim().toLowerCase()],
+    ),
+  )
 }
 
-function getContrastRatio(firstColor, secondColor) {
-  const luminances = [getRelativeLuminance(firstColor), getRelativeLuminance(secondColor)].sort(
-    (first, second) => second - first,
+function resolveRootToken(rootTokens, token, ancestors = []) {
+  assert.ok(!ancestors.includes(token), `Circular root token reference: ${[...ancestors, token].join(' -> ')}`)
+  const value = rootTokens.get(token)
+  assert.ok(value, `Missing root token: ${token}`)
+  return value.replace(/var\((--[\w-]+)\)/g, (_, referencedToken) =>
+    resolveRootToken(rootTokens, referencedToken, [...ancestors, token]),
   )
-  return (luminances[0] + 0.05) / (luminances[1] + 0.05)
 }
 
 function createSession(playerCount, mainDeckCardCount, seed = 1) {
@@ -292,6 +288,7 @@ assert.deepEqual(
   getCardDraftSessionErrors(
     compatibleDraft.session,
     compatibleSetupKey,
+    compatibleSetup.mainDeckCardCount,
     compatiblePlayers.map((player) => player.id),
     CARD_IDS,
   ),
@@ -309,6 +306,7 @@ assert.deepEqual(
   getCardDraftSessionErrors(
     compatibleDraft.session,
     changedRosterSetupKey,
+    compatibleSetup.mainDeckCardCount,
     compatiblePlayers.map((player) => player.id),
     CARD_IDS,
   ),
@@ -324,10 +322,26 @@ assert.deepEqual(
   getCardDraftSessionErrors(
     compatibleDraft.session,
     changedConfigSetupKey,
+    5,
     compatiblePlayers.map((player) => player.id),
     CARD_IDS,
   ),
-  ['setup-key'],
+  ['setup-key', 'main-count-mismatch'],
+)
+
+const staleQuotaDraft = {
+  ...compatibleDraft.session,
+  setupKey: changedConfigSetupKey,
+}
+assert.deepEqual(
+  getCardDraftSessionErrors(
+    staleQuotaDraft,
+    changedConfigSetupKey,
+    5,
+    compatiblePlayers.map((player) => player.id),
+    CARD_IDS,
+  ),
+  ['main-count-mismatch'],
 )
 
 const changedTeamSetupKey = createCardDraftSetupKey({
@@ -339,6 +353,7 @@ assert.deepEqual(
   getCardDraftSessionErrors(
     compatibleDraft.session,
     changedTeamSetupKey,
+    compatibleSetup.mainDeckCardCount,
     compatiblePlayers.map((player) => player.id),
     CARD_IDS,
   ),
@@ -369,7 +384,13 @@ for (const mainDeckCardCount of [3, 4, 5]) {
     ),
   )
   assert.deepEqual(
-    getCardDraftSessionErrors(session, draft.setupKey, draft.playerIds, CARD_IDS),
+    getCardDraftSessionErrors(
+      session,
+      draft.setupKey,
+      mainDeckCardCount,
+      draft.playerIds,
+      CARD_IDS,
+    ),
     [],
   )
 }
@@ -464,73 +485,128 @@ assert.equal(draftCardSource.match(/styles\.sectionSubtype/g)?.length, 3)
 assert.ok(draftCardSource.includes('styles.cardCap'))
 assert.ok(draftCardSource.includes('PALABRA CLAVE'))
 assert.ok(draftCardSource.includes('{card.keyword}'))
+assert.ok(draftCardSource.includes("main: 'Principal'"))
+assert.ok(draftCardSource.includes("lightning: 'Relámpago'"))
 
 assert.match(draftCardStyles, /\.unselected\s*\{\s*opacity: 0\.4;/)
-assert.match(draftCardStyles, /\.selectedMain,[\s\S]*?opacity: 1;/)
+const selectedCardRule = draftCardStyles.match(
+  /\.selectedMain,\s*\.selectedLightning\s*\{([^}]*)\}/,
+)
+assert.ok(selectedCardRule)
+assert.match(selectedCardRule[1], /opacity:\s*1;/)
+assert.match(selectedCardRule[1], /box-shadow:\s*var\(--shadow-card-selected\);/)
+assert.deepEqual(
+  [...selectedCardRule[1].matchAll(/^\s*([\w-]+)\s*:/gm)].map(([, property]) => property),
+  ['opacity', 'box-shadow'],
+)
+assert.doesNotMatch(selectedCardRule[1], /\bborder(?:-[\w-]+)?\s*:/)
+assert.doesNotMatch(draftCardStyles, /\.selected(?:Main|Lightning)::(?:before|after)/)
+assert.doesNotMatch(draftCardStyles, /--border-card-selected/)
+
+const cardButtonRule = draftCardStyles.match(/\.cardButton\s*\{([^}]*)\}/)
+assert.ok(cardButtonRule)
+assert.match(cardButtonRule[1], /box-sizing:\s*border-box;/)
+assert.match(cardButtonRule[1], /width:\s*100%;/)
+assert.match(cardButtonRule[1], /min-height:\s*490px;/)
+assert.match(cardButtonRule[1], /gap:\s*var\(--space-card-band-gutter\);/)
+assert.match(cardButtonRule[1], /border:\s*0;/)
+assert.match(cardButtonRule[1], /border-radius:\s*var\(--radius-card-face\);/)
+assert.match(cardButtonRule[1], /background:\s*var\(--color-card-surface\);/)
+assert.match(cardButtonRule[1], /box-shadow:\s*var\(--shadow-card-face\);/)
+assert.doesNotMatch(cardButtonRule[1], /transparent/)
+
 assert.match(
   draftCardStyles,
-  /\.cardButton\s*\{[^}]*border:\s*3px solid var\(--color-text\);/,
+  /\.titleSection,\s*\.characterSection,\s*\.everythingSection\s*\{[^}]*color:\s*var\(--color-card-band-text\);/,
 )
 assert.match(
   draftCardStyles,
-  /\.selectedMain\s*\{[^}]*border-color:\s*var\(--color-tertiary-dark\);[^}]*box-shadow:[^}]*var\(--color-tertiary\)/,
+  /\.titleSection\s*\{[^}]*background:\s*var\(--color-card-band-title\);/,
 )
 assert.match(
   draftCardStyles,
-  /\.selectedLightning\s*\{[^}]*border-color:\s*var\(--color-secondary-dark\);[^}]*box-shadow:[^}]*var\(--color-secondary\)/,
+  /\.characterSection\s*\{[^}]*background:\s*var\(--color-card-band-character\);/,
 )
 assert.match(
   draftCardStyles,
-  /\.titleSection\s*\{[^}]*background:\s*var\(--color-secondary\);/,
+  /\.everythingSection\s*\{[^}]*background:\s*var\(--color-card-band-everything\);/,
+)
+const cardSectionRule = draftCardStyles.match(/\.cardSection\s*\{([^}]*)\}/)
+assert.ok(cardSectionRule)
+assert.match(cardSectionRule[1], /position:\s*relative;/)
+assert.match(cardSectionRule[1], /display:\s*grid;/)
+assert.match(cardSectionRule[1], /padding:\s*var\(--space-sm\);/)
+assert.match(cardSectionRule[1], /place-items:\s*center;/)
+assert.doesNotMatch(cardSectionRule[1], /grid-template-rows:/)
+assert.match(
+  draftCardStyles,
+  /\.sectionValue\s*\{[^}]*align-self:\s*center;[^}]*justify-self:\s*stretch;[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*center;/,
 )
 assert.match(
   draftCardStyles,
-  /\.characterSection\s*\{[^}]*background:\s*var\(--color-tertiary\);/,
+  /\.sectionSubtype\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-sm\);[^}]*bottom:\s*var\(--space-sm\);[^}]*max-width:\s*calc\(100% - var\(--space-sm\) - var\(--space-sm\)\);[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*right;/,
 )
 assert.match(
   draftCardStyles,
-  /\.everythingSection\s*\{[^}]*background:\s*var\(--color-primary\);/,
+  /\.keywordSection\s*\{[^}]*align-content:\s*center;[^}]*justify-items:\s*center;[^}]*background:\s*var\(--color-card-surface\);[^}]*text-align:\s*center;/,
 )
 assert.match(
   draftCardStyles,
-  /\.keywordSection\s*\{[^}]*background:\s*var\(--color-surface\);/,
+  /\.keywordLabel\s*\{[^}]*color:\s*var\(--color-card-keyword-muted\);[^}]*text-align:\s*center;/,
 )
 assert.match(
   draftCardStyles,
-  /\.keywordValue\s*\{[^}]*color:\s*var\(--color-secondary\);/,
+  /\.keywordValue\s*\{[^}]*width:\s*100%;[^}]*color:\s*var\(--color-primary\);[^}]*overflow-wrap:\s*anywhere;[^}]*text-align:\s*center;/,
 )
 assert.match(
   draftCardStyles,
-  /\.cardCap\s*\{[^}]*background:\s*var\(--color-surface\);/,
+  /\.cardCap\s*\{[^}]*background:\s*var\(--color-card-surface\);/,
 )
-assert.match(draftCardStyles, /\.cardButton\s*\{[^}]*gap:\s*7px;/)
-assert.match(draftCardStyles, /\.sectionValue\s*\{[^}]*overflow-wrap:\s*anywhere;/)
-assert.match(draftCardStyles, /\.sectionSubtype\s*\{[^}]*justify-self:\s*end;/)
 assert.ok(!draftCardStyles.includes('.sectionLabel'))
 assert.doesNotMatch(draftCardStyles, /#(?:de2c6e|11b087|00aab7|fff(?:fff)?)\b/i)
 
-const rootBlock = globalStyles.match(/:root\s*\{([\s\S]*?)\}/)
-assert.ok(rootBlock)
-const rootTokens = new Map(
-  [...rootBlock[1].matchAll(/^\s*(--[\w-]+)\s*:\s*([^;]+);/gm)].map(([, token, value]) => [
-    token,
-    value.trim().toLowerCase(),
-  ]),
-)
+const rootTokens = getRootTokens(globalStyles)
 assert.equal(rootTokens.get('--color-background'), '#fff')
 assert.equal(rootTokens.get('--color-surface'), '#fff')
-assert.equal(rootTokens.get('--color-text-strong'), '#000')
 assert.equal(rootTokens.get('--color-primary'), '#00aab7')
 assert.equal(rootTokens.get('--color-secondary'), '#de2c6e')
 assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
-const bandTextColor = rootTokens.get('--color-text-strong')
-assert.ok(bandTextColor)
-for (const bandToken of ['--color-primary', '--color-secondary', '--color-tertiary']) {
-  const bandColor = rootTokens.get(bandToken)
-  assert.ok(bandColor)
-  assert.ok(getContrastRatio(bandTextColor, bandColor) >= 4.5)
+
+const expectedCardTokenValues = new Map([
+  ['--color-card-surface', 'var(--color-surface)'],
+  ['--color-card-band-title', 'var(--color-secondary)'],
+  ['--color-card-band-character', 'var(--color-tertiary)'],
+  ['--color-card-band-everything', 'var(--color-primary)'],
+  ['--color-card-band-text', '#fff'],
+  ['--color-card-keyword-muted', 'hsla(225, 6%, 59%, 1)'],
+  ['--color-card-selection', 'var(--color-tertiary)'],
+  ['--shadow-card-face', '2px 4px 8px 0 rgba(0, 0, 0, 0.25)'],
+  [
+    '--shadow-card-selected',
+    '0 0 8px 1px var(--color-card-selection), var(--shadow-card-face)',
+  ],
+  ['--radius-card-face', '16px'],
+  ['--space-card-band-gutter', '7px'],
+])
+for (const [token, expectedValue] of expectedCardTokenValues) {
+  assert.equal(rootTokens.get(token), expectedValue)
 }
+assert.equal(resolveRootToken(rootTokens, '--color-card-surface'), '#fff')
+assert.equal(resolveRootToken(rootTokens, '--color-card-band-title'), '#de2c6e')
+assert.equal(resolveRootToken(rootTokens, '--color-card-band-character'), '#11b087')
+assert.equal(resolveRootToken(rootTokens, '--color-card-band-everything'), '#00aab7')
+assert.equal(resolveRootToken(rootTokens, '--color-card-band-text'), '#fff')
+assert.equal(
+  resolveRootToken(rootTokens, '--color-card-keyword-muted'),
+  'hsla(225, 6%, 59%, 1)',
+)
+assert.equal(resolveRootToken(rootTokens, '--color-primary'), '#00aab7')
+assert.equal(rootTokens.has('--border-card-selected'), false)
+assert.equal(
+  resolveRootToken(rootTokens, '--shadow-card-selected'),
+  '0 0 8px 1px #11b087, 2px 4px 8px 0 rgba(0, 0, 0, 0.25)',
+)
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, per-player privacy flow=valid, setup invalidation=valid, card structure/tokens/contrast=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, centered card bands with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
 )
