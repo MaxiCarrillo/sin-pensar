@@ -140,7 +140,7 @@
 
 .keywordValue {
   width: 100%;
-  color: var(--color-secondary);
+  color: var(--color-primary);
   font-size: clamp(1.35rem, 8vw, 1.8rem);
   line-height: 1.1;
   overflow-wrap: anywhere;

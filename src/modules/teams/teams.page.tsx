@@ -284,6 +284,7 @@ function TeamsPage() {
                           <Button
                             className={styles.removePlayerButton}
                             type="text"
+                            shape="circle"
                             icon={<CloseOutlined />}
                             aria-label={`Quitar a ${player.name} del Equipo ${index + 1}`}
                             onClick={() => removeFromTeam(player)}

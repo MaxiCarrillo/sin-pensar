@@ -68,6 +68,20 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
+function getRuleBody(source, selectorPattern, label) {
+  const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
+  assert.ok(rule, `Missing CSS rule: ${label}`)
+  return rule[1]
+}
+
+function assertRuleUsesPill(source, selectorPattern, label) {
+  assert.match(
+    getRuleBody(source, selectorPattern, label),
+    /border-radius:\s*var\(--radius-control-pill\);/,
+    `${label} must use the shared control pill radius`,
+  )
+}
+
 function getTeamSignature(teamAssignment) {
   return teamAssignment.teams
     .map((team) => `${team.teamId}:${team.playerIds.join(',')}`)
@@ -819,6 +833,7 @@ assert.match(gameplayCardRule[1], /height:\s*clamp\(400px, 62dvh, 500px\);/)
 assert.match(gameplayCardRule[1], /gap:\s*var\(--space-card-band-gutter\);/)
 assert.match(gameplayCardRule[1], /border:\s*0;/)
 assert.match(gameplayCardRule[1], /border-radius:\s*var\(--radius-card-face\);/)
+assert.doesNotMatch(gameplayCardRule[1], /--radius-control-pill/)
 assert.match(gameplayCardRule[1], /background:\s*var\(--color-card-surface\);/)
 assert.match(gameplayCardRule[1], /box-shadow:\s*var\(--shadow-card-face\);/)
 assert.doesNotMatch(gameplayCardRule[1], /transparent/)
@@ -872,6 +887,11 @@ assert.match(
   /\.cardCap\s*\{[^}]*background:\s*var\(--color-card-surface\);/,
 )
 assert.doesNotMatch(gameplayCardStyles, /#(?:de2c6e|11b087|00aab7|fff(?:fff)?)\b/i)
+assertRuleUsesPill(
+  gameplayCardStyles,
+  '\\.actions button',
+  'Visible pass and correct buttons',
+)
 
 const outgoingCardStart = gameplayCardSource.indexOf('{outgoingCard ? (')
 const outgoingCardEnd = gameplayCardSource.indexOf(') : null}', outgoingCardStart)
@@ -913,12 +933,19 @@ assert.match(gamePageSource, /'--timer-progress': `\$\{progress \* 100\}%`/)
 assert.match(gameStyles, /\.activePage::before\s*\{[^}]*linear-gradient\([\s\S]*var\(--timer-progress\)/)
 assert.match(gameStyles, /\.timeoutPage::before\s*\{\s*background:\s*var\(--color-secondary\);/)
 assert.match(gameStyles, /\.gameCompletePage::before\s*\{\s*background:\s*var\(--color-primary\);/)
+assertRuleUsesPill(
+  gameStyles,
+  '\\.bottomButton,\\s*\\.resultActions button',
+  'Gameplay handoff, terminal, and result buttons',
+)
 
 const rootTokens = getRootTokens(globalStyles)
 assert.equal(rootTokens.get('--color-surface'), '#fff')
 assert.equal(rootTokens.get('--color-primary'), '#00aab7')
 assert.equal(rootTokens.get('--color-secondary'), '#de2c6e')
 assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
+assert.equal(rootTokens.get('--radius-control-pill'), '999px')
+assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
 const expectedCardTokenValues = new Map([
   ['--color-card-surface', 'var(--color-surface)'],
   ['--color-card-band-title', 'var(--color-secondary)'],
@@ -996,5 +1023,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, centered card bands with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
+  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
 )

@@ -1,5 +1,7 @@
 import type { ThemeConfig } from 'antd'
 
+const CONTROL_PILL_RADIUS = 999
+
 export const appTheme: ThemeConfig = {
   token: {
     colorPrimary: '#00AAB7',
@@ -19,6 +21,9 @@ export const appTheme: ThemeConfig = {
   },
   components: {
     Button: {
+      borderRadius: CONTROL_PILL_RADIUS,
+      borderRadiusLG: CONTROL_PILL_RADIUS,
+      borderRadiusSM: CONTROL_PILL_RADIUS,
       primaryShadow: '0 10px 24px rgba(0, 170, 183, 0.27)',
     },
     Drawer: {
@@ -26,6 +31,9 @@ export const appTheme: ThemeConfig = {
     },
     Input: {
       activeBorderColor: '#00AAB7',
+      borderRadius: CONTROL_PILL_RADIUS,
+      borderRadiusLG: CONTROL_PILL_RADIUS,
+      borderRadiusSM: CONTROL_PILL_RADIUS,
       hoverBorderColor: '#00AAB7',
     },
   },

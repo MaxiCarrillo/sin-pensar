@@ -53,6 +53,40 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
+function getRuleBody(source, selectorPattern, label) {
+  const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
+  assert.ok(rule, `Missing CSS rule: ${label}`)
+  return rule[1]
+}
+
+function assertRuleUsesPill(source, selectorPattern, label) {
+  assert.match(
+    getRuleBody(source, selectorPattern, label),
+    /border-radius:\s*var\(--radius-control-pill\);/,
+    `${label} must use the shared control pill radius`,
+  )
+}
+
+function getAntdButtonSource(source, className) {
+  const classMarker = `className={styles.${className}}`
+  const classIndex = source.indexOf(classMarker)
+  assert.ok(classIndex >= 0, `Missing Ant Design button class: ${className}`)
+  const buttonStart = source.lastIndexOf('<Button', classIndex)
+  const buttonClose = source.slice(classIndex).match(/\n\s*\/>/)
+  assert.ok(buttonStart >= 0 && buttonClose, `Invalid Ant Design button: ${className}`)
+  const buttonEnd = classIndex + buttonClose.index + buttonClose[0].length
+  return { buttonSource: source.slice(buttonStart, buttonEnd), classIndex }
+}
+
+function assertCircleIconButton(source, className) {
+  const { buttonSource, classIndex } = getAntdButtonSource(source, className)
+  assert.match(buttonSource, /shape="circle"/)
+  assert.match(buttonSource, /aria-label=/)
+  const tooltipStart = source.lastIndexOf('<Tooltip', classIndex)
+  const tooltipEnd = source.indexOf('</Tooltip>', classIndex)
+  assert.ok(tooltipStart >= 0 && tooltipEnd > classIndex, `${className} must retain its tooltip`)
+}
+
 function createSession(playerCount, mainDeckCardCount, seed = 1) {
   const playerIds = Array.from({ length: playerCount }, (_, index) => `player-${index + 1}`)
   const setupKey = `setup-${playerCount}-${mainDeckCardCount}`
@@ -399,16 +433,47 @@ const setupStoreSource = await readFile(
   new URL('../src/shared/store/setup.store.ts', import.meta.url),
   'utf8',
 )
+const homePageSource = await readFile(
+  new URL('../src/modules/home/home.page.tsx', import.meta.url),
+  'utf8',
+)
+const homeStyles = await readFile(
+  new URL('../src/modules/home/home.module.css', import.meta.url),
+  'utf8',
+)
+const avatarInputSource = await readFile(
+  new URL('../src/modules/common/components/avatar-input/avatar-input.tsx', import.meta.url),
+  'utf8',
+)
+const avatarInputStyles = await readFile(
+  new URL(
+    '../src/modules/common/components/avatar-input/avatar-input.module.css',
+    import.meta.url,
+  ),
+  'utf8',
+)
 const playersPageSource = await readFile(
   new URL('../src/modules/players/players.page.tsx', import.meta.url),
+  'utf8',
+)
+const playersStyles = await readFile(
+  new URL('../src/modules/players/players.module.css', import.meta.url),
   'utf8',
 )
 const teamsPageSource = await readFile(
   new URL('../src/modules/teams/teams.page.tsx', import.meta.url),
   'utf8',
 )
+const teamsStyles = await readFile(
+  new URL('../src/modules/teams/teams.module.css', import.meta.url),
+  'utf8',
+)
 const cardsPageSource = await readFile(
   new URL('../src/modules/cards/cards.page.tsx', import.meta.url),
+  'utf8',
+)
+const cardsStyles = await readFile(
+  new URL('../src/modules/cards/cards.module.css', import.meta.url),
   'utf8',
 )
 const draftCardSource = await readFile(
@@ -420,6 +485,10 @@ const draftCardStyles = await readFile(
   'utf8',
 )
 const globalStyles = await readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+const themeSource = await readFile(
+  new URL('../src/core/theme/theme.ts', import.meta.url),
+  'utf8',
+)
 const routesSource = await readFile(
   new URL('../src/core/routes/routes.tsx', import.meta.url),
   'utf8',
@@ -430,6 +499,62 @@ assert.ok(playersPageSource.includes('disabled={hasReachedPlayerLimit}'))
 assert.ok(teamsPageSource.includes('disabled={draftResult.kind === \'invalid\'}'))
 assert.ok(teamsPageSource.includes("navigate('/cards')"))
 assert.ok(routesSource.includes('<Route path="/cards" element={<CardsPage />} />'))
+
+assert.match(themeSource, /const CONTROL_PILL_RADIUS = 999/)
+const globalThemeTokenBlock = themeSource.match(/token:\s*\{([\s\S]*?)\n\s*\},/)
+assert.ok(globalThemeTokenBlock)
+assert.match(globalThemeTokenBlock[1], /borderRadius:\s*16,/)
+assert.match(globalThemeTokenBlock[1], /borderRadiusLG:\s*24,/)
+assert.doesNotMatch(globalThemeTokenBlock[1], /CONTROL_PILL_RADIUS/)
+for (const componentName of ['Button', 'Input']) {
+  const componentBlock = themeSource.match(
+    new RegExp(`${componentName}:\\s*\\{([\\s\\S]*?)\\n\\s*\\},`),
+  )
+  assert.ok(componentBlock, `Missing ${componentName} theme overrides`)
+  for (const radiusToken of ['borderRadius', 'borderRadiusSM', 'borderRadiusLG']) {
+    assert.match(
+      componentBlock[1],
+      new RegExp(`${radiusToken}:\\s*CONTROL_PILL_RADIUS,`),
+      `${componentName}.${radiusToken} must use the pill radius`,
+    )
+  }
+}
+
+assertRuleUsesPill(homeStyles, '\\.playButton', 'Home play button')
+assertRuleUsesPill(avatarInputStyles, '\\.nicknameInput', 'Nickname input wrapper')
+assertRuleUsesPill(playersStyles, '\\.playerInput', 'Player input wrapper')
+assertRuleUsesPill(playersStyles, '\\.addButton', 'Add-player button')
+assertRuleUsesPill(playersStyles, '\\.actions button', 'Player footer buttons')
+assertRuleUsesPill(playersStyles, '\\.settingsContent > button', 'Settings save button')
+assertRuleUsesPill(
+  teamsStyles,
+  '\\.actions button,\\s*\\.drawerContent > button,\\s*\\.assignButton',
+  'Team assignment and action buttons',
+)
+assertRuleUsesPill(
+  cardsStyles,
+  '\\.revealButton,\\s*\\.completionActions button,\\s*\\.selectionActions button',
+  'Card-flow action buttons',
+)
+assert.ok(homePageSource.includes('className={styles.playButton}'))
+assert.ok(avatarInputSource.includes('className={styles.nicknameInput}'))
+
+for (const className of ['contactButton']) assertCircleIconButton(homePageSource, className)
+for (const className of ['backButton', 'helpButton', 'removeButton']) {
+  assertCircleIconButton(playersPageSource, className)
+}
+for (const className of ['backButton', 'removePlayerButton']) {
+  assertCircleIconButton(teamsPageSource, className)
+}
+const playerRemoveRule = getRuleBody(playersStyles, '\\.removeButton', 'Player remove button')
+assert.match(playerRemoveRule, /width:\s*40px !important;/)
+assert.match(playerRemoveRule, /min-width:\s*40px !important;/)
+assert.match(playerRemoveRule, /height:\s*40px !important;/)
+const teamRemoveRule = getRuleBody(teamsStyles, '\\.removePlayerButton', 'Team remove button')
+assert.match(teamRemoveRule, /width:\s*44px !important;/)
+assert.match(teamRemoveRule, /min-width:\s*44px !important;/)
+assert.match(teamRemoveRule, /height:\s*44px !important;/)
+assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
 
 const partializeSource = setupStoreSource.slice(
   setupStoreSource.indexOf('partialize:'),
@@ -511,6 +636,7 @@ assert.match(cardButtonRule[1], /min-height:\s*490px;/)
 assert.match(cardButtonRule[1], /gap:\s*var\(--space-card-band-gutter\);/)
 assert.match(cardButtonRule[1], /border:\s*0;/)
 assert.match(cardButtonRule[1], /border-radius:\s*var\(--radius-card-face\);/)
+assert.doesNotMatch(cardButtonRule[1], /--radius-control-pill/)
 assert.match(cardButtonRule[1], /background:\s*var\(--color-card-surface\);/)
 assert.match(cardButtonRule[1], /box-shadow:\s*var\(--shadow-card-face\);/)
 assert.doesNotMatch(cardButtonRule[1], /transparent/)
@@ -563,6 +689,7 @@ assert.match(
   /\.cardCap\s*\{[^}]*background:\s*var\(--color-card-surface\);/,
 )
 assert.ok(!draftCardStyles.includes('.sectionLabel'))
+assert.doesNotMatch(draftCardStyles, /--radius-control-pill/)
 assert.doesNotMatch(draftCardStyles, /#(?:de2c6e|11b087|00aab7|fff(?:fff)?)\b/i)
 
 const rootTokens = getRootTokens(globalStyles)
@@ -571,6 +698,7 @@ assert.equal(rootTokens.get('--color-surface'), '#fff')
 assert.equal(rootTokens.get('--color-primary'), '#00aab7')
 assert.equal(rootTokens.get('--color-secondary'), '#de2c6e')
 assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
+assert.equal(rootTokens.get('--radius-control-pill'), '999px')
 
 const expectedCardTokenValues = new Map([
   ['--color-card-surface', 'var(--color-surface)'],
@@ -608,5 +736,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, centered card bands with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
 )

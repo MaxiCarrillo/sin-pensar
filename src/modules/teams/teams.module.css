@@ -84,7 +84,7 @@
 .drawerContent > button,
 .assignButton {
   min-height: 40px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-bold);
 }
 

@@ -25,6 +25,7 @@
   --shadow-control: 0 8px 20px rgba(0, 91, 99, 0.12);
   --shadow-card-face: 2px 4px 8px 0 rgba(0, 0, 0, 0.25);
   --shadow-card-selected: 0 0 8px 1px var(--color-card-selection), var(--shadow-card-face);
+  --radius-control-pill: 999px;
   --radius-sm: 0.75rem;
   --radius-md: 1rem;
   --radius-lg: 1.5rem;

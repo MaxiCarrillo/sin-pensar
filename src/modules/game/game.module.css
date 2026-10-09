@@ -154,7 +154,7 @@
 .bottomButton,
 .resultActions button {
   min-height: 52px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-extrabold);
   white-space: normal;
 }

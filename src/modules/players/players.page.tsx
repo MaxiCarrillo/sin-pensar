@@ -338,6 +338,7 @@ function PlayersPage() {
                     <Button
                       className={styles.removeButton}
                       size="large"
+                      shape="circle"
                       icon={<MinusCircleOutlined />}
                       aria-label={player.name ? `Eliminar a ${player.name}` : 'Eliminar jugador vacío'}
                       htmlType="button"

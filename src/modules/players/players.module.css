@@ -126,13 +126,12 @@
   height: 40px !important;
   padding: 0 !important;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
   color: var(--color-secondary);
 }
 
 .playerInput {
   height: 40px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
 }
 
 .validationMessage,
@@ -157,7 +156,7 @@
 
 .addButton {
   border-color: var(--color-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
   color: var(--color-primary-dark);
   font-weight: var(--font-weight-bold);
 }
@@ -174,7 +173,7 @@
 
 .actions button {
   width: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-bold);
 }
 
@@ -229,7 +228,7 @@
 
 .settingsContent > button {
   min-height: 40px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-bold);
 }
 

@@ -53,7 +53,7 @@
 .nicknameInput {
   border-width: 2px;
   border-color: var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control-pill);
 }
 
 .nicknameInput :global(.ant-input-prefix) {
