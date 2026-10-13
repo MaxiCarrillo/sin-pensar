@@ -12,9 +12,10 @@
   margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
+  color: var(--color-primary-dark);
 }
 
 .drawerHeader > p {
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-medium);
+  color: var(--color-primary-dark);
+  /* font-weight: var(--font-weight-medium); */
 }

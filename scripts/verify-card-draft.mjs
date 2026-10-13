@@ -500,6 +500,63 @@ assert.ok(teamsPageSource.includes('disabled={draftResult.kind === \'invalid\'}'
 assert.ok(teamsPageSource.includes("navigate('/cards')"))
 assert.ok(routesSource.includes('<Route path="/cards" element={<CardsPage />} />'))
 
+const moveSelectedPlayerStart = teamsPageSource.indexOf('const moveSelectedPlayer')
+const removeFromTeamStart = teamsPageSource.indexOf('const removeFromTeam', moveSelectedPlayerStart)
+assert.ok(moveSelectedPlayerStart >= 0)
+assert.ok(removeFromTeamStart > moveSelectedPlayerStart)
+const moveSelectedPlayerSource = teamsPageSource.slice(moveSelectedPlayerStart, removeFromTeamStart)
+for (const contract of [
+  /const destinationIndex = teamIds\.indexOf\(teamId\);/,
+  /const capacity = targetSizes\[destinationIndex\];/,
+  /const destinationOccupants = players\.filter\(\(player\) => assignmentDraft\[player\.id\] === teamId\)\.length;/,
+  /if \(destinationOccupants >= capacity\) \{[\s\S]*setStatusMessage\(`El Equipo \$\{destinationIndex \+ 1\} está completo\.`\);[\s\S]*return;/,
+]) {
+  assert.match(moveSelectedPlayerSource, contract)
+}
+const capacityGuardIndex = moveSelectedPlayerSource.indexOf('if (destinationOccupants >= capacity)')
+assert.ok(capacityGuardIndex >= 0)
+assert.ok(
+  moveSelectedPlayerSource.indexOf('return;', capacityGuardIndex) <
+    moveSelectedPlayerSource.indexOf('const nextDraft'),
+)
+assert.ok(
+  moveSelectedPlayerSource.indexOf('const nextDraft') <
+    moveSelectedPlayerSource.indexOf('setAssignmentDraft(nextDraft)'),
+)
+
+const teamDestinationsStart = teamsPageSource.indexOf('teamIds.map((teamId, index) => {')
+const teamDestinationsEnd = teamsPageSource.indexOf('</section>', teamDestinationsStart)
+assert.ok(teamDestinationsStart >= 0)
+assert.ok(teamDestinationsEnd > teamDestinationsStart)
+const teamDestinationsSource = teamsPageSource.slice(teamDestinationsStart, teamDestinationsEnd)
+for (const contract of [
+  /const capacity = targetSizes\[index\];/,
+  /const isAtCapacity = teamPlayers\.length >= capacity;/,
+  /\{teamPlayers\.length\} \/ \{capacity\} jugadores/,
+  /disabled=\{isSelectedDestination \|\| isAtCapacity\}/,
+  /isSelectedDestination[\s\S]*`\$\{selectedPlayer\.name\} ya está aquí`[\s\S]*isAtCapacity[\s\S]*'Equipo completo'[\s\S]*selectedTeamId[\s\S]*'Mover aquí'[\s\S]*'Asignar aquí'/,
+]) {
+  assert.match(teamDestinationsSource, contract)
+}
+
+const teamCardRule = getRuleBody(teamsStyles, '\\.teamCard', 'Team card entry animation')
+assert.match(teamCardRule, /animation:\s*team-card-enter 240ms ease-out both;/)
+const playerRowRule = getRuleBody(teamsStyles, '\\.teamPlayers li', 'Team player entry animation')
+assert.match(playerRowRule, /animation:\s*player-row-enter 180ms ease-out both;/)
+for (const [animationName, animationSource] of [
+  ['team-card-enter', teamsStyles.match(/@keyframes team-card-enter\s*\{([\s\S]*?)\n\}/)?.[1]],
+  ['player-row-enter', teamsStyles.match(/@keyframes player-row-enter\s*\{([\s\S]*?)\n\}/)?.[1]],
+]) {
+  assert.ok(animationSource, `Missing ${animationName} keyframes`)
+  assert.match(animationSource, /from\s*\{[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translateY\(/)
+  assert.match(animationSource, /to\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*translateY\(0\);/)
+  assert.doesNotMatch(animationSource, /scale\(|infinite/)
+}
+assert.match(
+  teamsStyles,
+  /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.teamCard,\s*\.teamPlayers li\s*\{[^}]*animation:\s*none;/,
+)
+
 const settingsOptionCardStart = playersPageSource.indexOf('interface SettingsOptionCardProps')
 const playersPageStart = playersPageSource.indexOf('function PlayersPage')
 assert.ok(settingsOptionCardStart >= 0)
@@ -536,7 +593,7 @@ for (const groupName of ['turn-duration', 'main-deck-card-count', 'team-count'])
 for (const contract of [
   /TURN_DURATION_OPTIONS\.map[\s\S]*valueText=\{`\$\{option\.value\}s`\}/,
   /MAIN_DECK_CARD_OPTIONS\.map[\s\S]*supportingText="cartas de 10"[\s\S]*valueText=\{String\(option\.value\)\}/,
-  /validTeamCounts\.map[\s\S]*supportingText=\{`equipos · \$\{getTeamSizeSummary\(players\.length, count\)\}`\}/,
+  /validTeamCounts\.map[\s\S]*supportingText=\{getTeamSizeSummary\(players\.length, count\)\}/,
   /className=\{styles\.settingsRequirement\} role="status"/,
 ]) {
   assert.match(settingsDrawerSource, contract)
@@ -575,7 +632,7 @@ const optionCardRule = getRuleBody(
 )
 for (const contract of [
   /min-height:\s*72px;/,
-  /border:\s*3px solid var\(--color-primary\);/,
+  /box-shadow:\s*0 0 10px 1px var\(--color-border\);/,
   /border-radius:\s*var\(--radius-md\);/,
   /background:\s*var\(--color-surface\);/,
   /color:\s*var\(--color-primary\);/,
@@ -586,9 +643,9 @@ for (const contract of [
 for (const contract of [
   /\.threeColumnOptionGrid\s*\{[^}]*repeat\(3, minmax\(0, 1fr\)\)/,
   /\.teamOptionGrid\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/,
-  /\.optionCardValue\s*\{[^}]*font-size:\s*clamp\(1\.5rem, 8vw, 1\.875rem\);[^}]*font-weight:\s*var\(--font-weight-extrabold\);/,
+  /\.optionCardValue\s*\{[^}]*font-size:\s*clamp\(1\.5rem, 8vw, 2\.5rem\);[^}]*font-weight:\s*var\(--font-weight-bold\);/,
   /\.optionCardSupportingText\s*\{[^}]*overflow-wrap:\s*anywhere;/,
-  /\.optionCardSelectedIndicator\s*\{[^}]*position:\s*absolute;[^}]*top:\s*-0\.25rem;[^}]*right:\s*-0\.25rem;[^}]*display:\s*grid;/,
+  /\.optionCardSelectedIndicator\s*\{[^}]*position:\s*absolute;[^}]*top:\s*-0\.25rem;[^}]*right:\s*-0\.9rem;[^}]*display:\s*grid;/,
   /\.optionCardGrid \.optionCardRadio\s*\{[^}]*position:\s*absolute;[^}]*opacity:\s*0;/,
   /\.optionCard:has\(input:checked\)\s*\{[^}]*background:\s*var\(--color-primary\);[^}]*box-shadow:\s*var\(--shadow-control\);[^}]*color:\s*var\(--color-surface\);/,
   /\.optionCard:has\(input:focus-visible\)\s*\{[^}]*outline:\s*3px solid var\(--color-focus\);[^}]*outline-offset:\s*3px;/,
@@ -836,5 +893,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
 )
