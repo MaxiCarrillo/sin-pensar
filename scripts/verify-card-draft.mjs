@@ -500,6 +500,106 @@ assert.ok(teamsPageSource.includes('disabled={draftResult.kind === \'invalid\'}'
 assert.ok(teamsPageSource.includes("navigate('/cards')"))
 assert.ok(routesSource.includes('<Route path="/cards" element={<CardsPage />} />'))
 
+const settingsOptionCardStart = playersPageSource.indexOf('interface SettingsOptionCardProps')
+const playersPageStart = playersPageSource.indexOf('function PlayersPage')
+assert.ok(settingsOptionCardStart >= 0)
+assert.ok(playersPageStart > settingsOptionCardStart)
+const settingsOptionCardSource = playersPageSource.slice(settingsOptionCardStart, playersPageStart)
+for (const contract of [
+  /<Radio\b/,
+  /className=\{styles\.optionCard\}/,
+  /icon: styles\.optionCardRadio/,
+  /CheckCircleFilled aria-hidden="true"/,
+  /className="visually-hidden">Seleccionado</,
+  /className=\{styles\.optionCardValue\}>\{valueText\}<\/[\s\S]*className=\{styles\.optionCardSupportingText\}>\{supportingText\}</,
+  /disabled=\{disabled\}/,
+]) {
+  assert.match(settingsOptionCardSource, contract)
+}
+assert.doesNotMatch(settingsOptionCardSource, /\bicon\??:\s*ReactNode\b|\bicon=\{|optionCardIcon/)
+assert.doesNotMatch(playersPageSource, /\bReactNode\b/)
+assert.doesNotMatch(playersPageSource, /\b(?:CreditCardOutlined|TeamOutlined)\b/)
+
+const settingsDrawerStart = playersPageSource.indexOf('<div className={styles.settingsContent}>')
+const settingsDrawerEnd = playersPageSource.indexOf('</AppDrawer>', settingsDrawerStart)
+assert.ok(settingsDrawerStart >= 0)
+assert.ok(settingsDrawerEnd > settingsDrawerStart)
+const settingsDrawerSource = playersPageSource.slice(settingsDrawerStart, settingsDrawerEnd)
+assert.equal(settingsDrawerSource.match(/<Radio\.Group/g)?.length, 3)
+assert.equal(settingsDrawerSource.match(/<SettingsOptionCard/g)?.length, 3)
+assert.equal(settingsDrawerSource.match(/styles\.threeColumnOptionGrid/g)?.length, 2)
+assert.equal(settingsDrawerSource.match(/styles\.teamOptionGrid/g)?.length, 1)
+assert.doesNotMatch(settingsDrawerSource, /\boptions=/)
+for (const groupName of ['turn-duration', 'main-deck-card-count', 'team-count']) {
+  assert.ok(settingsDrawerSource.includes(`name="${groupName}"`))
+}
+for (const contract of [
+  /TURN_DURATION_OPTIONS\.map[\s\S]*valueText=\{`\$\{option\.value\}s`\}/,
+  /MAIN_DECK_CARD_OPTIONS\.map[\s\S]*supportingText="cartas de 10"[\s\S]*valueText=\{String\(option\.value\)\}/,
+  /validTeamCounts\.map[\s\S]*supportingText=\{`equipos · \$\{getTeamSizeSummary\(players\.length, count\)\}`\}/,
+  /className=\{styles\.settingsRequirement\} role="status"/,
+]) {
+  assert.match(settingsDrawerSource, contract)
+}
+assert.match(playersPageSource, /deriveValidTeamCounts\(players\.length\)/)
+assert.match(playersPageSource, /deriveBalancedTeamSizes\(playerCount, teamCount\)/)
+assert.match(
+  playersPageSource,
+  /const handleSaveSettings[\s\S]*setTurnDuration\(durationDraft\)[\s\S]*setMainDeckCardCount\(cardCountDraft\)[\s\S]*setTeamCount\(teamCountDraft\)[\s\S]*setSettingsOpen\(false\)/,
+)
+
+const optionCardStylesStart = playersStyles.indexOf('.settingsGroup .optionCardGrid')
+const optionCardStylesEnd = playersStyles.indexOf('.settingsRequirement', optionCardStylesStart)
+assert.ok(optionCardStylesStart >= 0)
+assert.ok(optionCardStylesEnd > optionCardStylesStart)
+const optionCardStyles = playersStyles.slice(optionCardStylesStart, optionCardStylesEnd)
+assert.doesNotMatch(optionCardStyles, /--radius-control-pill/)
+assert.doesNotMatch(optionCardStyles, /(?:#000(?:000)?\b|\bblack\b)/i)
+assert.doesNotMatch(optionCardStyles, /:hover\b|transform\s*:/)
+assert.doesNotMatch(playersStyles, /\.optionCardIcon\b/)
+assert.doesNotMatch(playersStyles, /:global\([^)]*ant-radio/i)
+
+const settingsContentRule = getRuleBody(playersStyles, '\\.settingsContent', 'Settings groups')
+assert.match(settingsContentRule, /gap:\s*var\(--space-lg\);/)
+const optionCardGridRule = getRuleBody(
+  playersStyles,
+  '\\.settingsGroup \\.optionCardGrid',
+  'Settings legend-to-options spacing',
+)
+assert.match(optionCardGridRule, /margin-top:\s*var\(--space-xs\);/)
+
+const optionCardRule = getRuleBody(
+  playersStyles,
+  '\\.optionCardGrid \\.optionCard',
+  'Player settings option card',
+)
+for (const contract of [
+  /min-height:\s*72px;/,
+  /border:\s*3px solid var\(--color-primary\);/,
+  /border-radius:\s*var\(--radius-md\);/,
+  /background:\s*var\(--color-surface\);/,
+  /color:\s*var\(--color-primary\);/,
+  /transition:/,
+]) {
+  assert.match(optionCardRule, contract)
+}
+for (const contract of [
+  /\.threeColumnOptionGrid\s*\{[^}]*repeat\(3, minmax\(0, 1fr\)\)/,
+  /\.teamOptionGrid\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/,
+  /\.optionCardValue\s*\{[^}]*font-size:\s*clamp\(1\.5rem, 8vw, 1\.875rem\);[^}]*font-weight:\s*var\(--font-weight-extrabold\);/,
+  /\.optionCardSupportingText\s*\{[^}]*overflow-wrap:\s*anywhere;/,
+  /\.optionCardSelectedIndicator\s*\{[^}]*position:\s*absolute;[^}]*top:\s*-0\.25rem;[^}]*right:\s*-0\.25rem;[^}]*display:\s*grid;/,
+  /\.optionCardGrid \.optionCardRadio\s*\{[^}]*position:\s*absolute;[^}]*opacity:\s*0;/,
+  /\.optionCard:has\(input:checked\)\s*\{[^}]*background:\s*var\(--color-primary\);[^}]*box-shadow:\s*var\(--shadow-control\);[^}]*color:\s*var\(--color-surface\);/,
+  /\.optionCard:has\(input:focus-visible\)\s*\{[^}]*outline:\s*3px solid var\(--color-focus\);[^}]*outline-offset:\s*3px;/,
+  /\.optionCard:has\(input:disabled\)\s*\{[^}]*color:\s*var\(--color-text-muted\);/,
+  /@media \(max-width: 350px\)[\s\S]*\.optionCardGrid \.optionCard\s*\{[^}]*padding-inline:\s*0\.35rem;/,
+  /@media \(max-width: 350px\)[\s\S]*\.threeColumnOptionGrid \.optionCard\s*\{[^}]*aspect-ratio:\s*auto;/,
+]) {
+  assert.match(playersStyles, contract)
+}
+assert.match(globalStyles, /@media \(prefers-reduced-motion: reduce\)/)
+
 assert.match(themeSource, /const CONTROL_PILL_RADIUS = 999/)
 const globalThemeTokenBlock = themeSource.match(/token:\s*\{([\s\S]*?)\n\s*\},/)
 assert.ok(globalThemeTokenBlock)
@@ -736,5 +836,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
 )

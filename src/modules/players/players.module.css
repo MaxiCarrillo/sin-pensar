@@ -217,34 +217,139 @@
   font-weight: var(--font-weight-bold);
 }
 
-.settingsGroup label {
-  display: inline-flex;
-  min-height: 40px;
-  padding-inline: var(--space-xs) !important;
-  align-items: center;
-  font-weight: var(--font-weight-bold);
-  text-align: center;
-}
-
 .settingsContent > button {
   min-height: 40px;
   border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-bold);
 }
 
-.teamCountOptions {
+.settingsGroup .optionCardGrid {
   display: grid;
+  width: 100%;
+  margin-top: var(--space-xs);
   gap: var(--space-xs);
 }
 
-.teamCountOptions label {
+.threeColumnOptionGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teamOptionGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.optionCardGrid .optionCard {
+  position: relative;
+  display: flex;
   width: 100%;
-  justify-content: flex-start;
-  text-align: left;
-  white-space: normal;
+  min-width: 0;
+  min-height: 72px;
+  margin-inline-end: 0;
+  padding: var(--space-sm);
+  align-items: stretch;
+  justify-content: center;
+  box-shadow: 0 0 10px 1px var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.threeColumnOptionGrid .optionCard {
+  min-height: 96px;
+  aspect-ratio: 1;
+}
+
+.teamOptionGrid .optionCard {
+  min-height: 104px;
+}
+
+.optionCardGrid .optionCardRadio {
+  position: absolute;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  opacity: 0;
+}
+
+.optionCardRadio input {
+  width: 100%;
+  height: 100%;
+}
+
+.optionCardGrid .optionCardLabel {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  padding-inline-start: 0;
+}
+
+.optionCardContent {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  padding-block: 0.15rem;
+  align-content: center;
+  justify-items: center;
+  gap: 0.15rem;
+  color: inherit;
+  pointer-events: none;
+  text-align: center;
+}
+
+.optionCardValue {
+  font-size: clamp(1.5rem, 8vw, 2.5rem);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.optionCardSupportingText {
+  max-width: 100%;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.optionCardSelectedIndicator {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.9rem;
+  display: grid;
+  font-size: var(--font-size-md);
+  line-height: 1;
+  place-items: center;
+}
+
+.optionCardGrid .optionCard:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  box-shadow: var(--shadow-control);
+  color: var(--color-surface);
+}
+
+.optionCardGrid .optionCard:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.optionCardGrid .optionCard:has(input:disabled) {
+  border-color: var(--color-border);
+  background: var(--color-surface-tinted);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .settingsRequirement {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
@@ -253,5 +358,17 @@
 @media (max-width: 350px) {
   .page {
     padding-inline: var(--space-sm);
+  }
+
+  .settingsGroup .optionCardGrid {
+    gap: 0.375rem;
+  }
+
+  .optionCardGrid .optionCard {
+    padding-inline: 0.35rem;
+  }
+
+  .threeColumnOptionGrid .optionCard {
+    aspect-ratio: auto;
   }
 }

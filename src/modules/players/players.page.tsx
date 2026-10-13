@@ -1,5 +1,6 @@
 import {
   ArrowLeftOutlined,
+  CheckCircleFilled,
   MinusCircleOutlined,
   PlusOutlined,
   QuestionOutlined,
@@ -34,6 +35,47 @@ import styles from './players.module.css'
 
 const EMPTY_NAME_MESSAGE = 'El nombre no puede estar vacío'
 
+interface SettingsOptionCardProps {
+  disabled?: boolean
+  selected: boolean
+  supportingText?: string
+  value: number
+  valueText: string
+}
+
+function SettingsOptionCard({
+  disabled,
+  selected,
+  supportingText,
+  value,
+  valueText,
+}: SettingsOptionCardProps) {
+  return (
+    <Radio
+      className={styles.optionCard}
+      classNames={{
+        icon: styles.optionCardRadio,
+        label: styles.optionCardLabel,
+      }}
+      disabled={disabled}
+      value={value}
+    >
+      <span className={styles.optionCardContent}>
+        {selected ? (
+          <span className={styles.optionCardSelectedIndicator}>
+            <CheckCircleFilled aria-hidden="true" />
+            <span className="visually-hidden">Seleccionado</span>
+          </span>
+        ) : null}
+        <span className={styles.optionCardValue}>{valueText}</span>
+        {supportingText ? (
+          <span className={styles.optionCardSupportingText}>{supportingText}</span>
+        ) : null}
+      </span>
+    </Radio>
+  )
+}
+
 function getDuplicateName(players: Player[], playerId: string | null, name: string) {
   const trimmedName = name.trim()
   if (!trimmedName) return undefined
@@ -57,14 +99,14 @@ function getMissingPlayersMessage(missingPlayers: number) {
     : `Se necesitan al menos ${missingPlayers} jugadores más.`
 }
 
-function formatTeamSizes(sizes: number[]) {
-  if (sizes.length < 2) return sizes.join('')
-  return `${sizes.slice(0, -1).join(', ')} y ${sizes.at(-1)}`
-}
-
-function getTeamCountLabel(playerCount: number, teamCount: TeamCount) {
+function getTeamSizeSummary(playerCount: number, teamCount: TeamCount) {
   const sizes = deriveBalancedTeamSizes(playerCount, teamCount)
-  return `${teamCount} equipos · ${formatTeamSizes(sizes)} jugadores`
+  const smallestTeamSize = Math.min(...sizes)
+  const largestTeamSize = Math.max(...sizes)
+
+  return smallestTeamSize === largestTeamSize
+    ? `${smallestTeamSize} jugadores por equipo`
+    : `${smallestTeamSize}–${largestTeamSize} jugadores por equipo`
 }
 
 function PlayersPage() {
@@ -237,45 +279,74 @@ function PlayersPage() {
             <legend>Tiempo por turno</legend>
             <Radio.Group
               block
+              aria-label="Tiempo por turno"
+              className={`${styles.optionCardGrid} ${styles.threeColumnOptionGrid}`}
               name="turn-duration"
-              options={[...TURN_DURATION_OPTIONS]}
               value={durationDraft}
               onChange={(event) => {
                 if (isTurnDuration(event.target.value)) setDurationDraft(event.target.value)
               }}
-            />
+            >
+              {TURN_DURATION_OPTIONS.map((option) => (
+                <SettingsOptionCard
+                  key={option.value}
+                  selected={durationDraft === option.value}
+                  value={option.value}
+                  valueText={`${option.value}s`}
+                />
+              ))}
+            </Radio.Group>
           </fieldset>
           <fieldset className={styles.settingsGroup}>
             <legend>Cartas para el mazo principal</legend>
             <Radio.Group
               block
+              aria-label="Cartas para el mazo principal"
+              className={`${styles.optionCardGrid} ${styles.threeColumnOptionGrid}`}
               name="main-deck-card-count"
-              options={[...MAIN_DECK_CARD_OPTIONS]}
               value={cardCountDraft}
               onChange={(event) => {
                 if (isMainDeckCardCount(event.target.value)) {
                   setCardCountDraft(event.target.value)
                 }
               }}
-            />
+            >
+              {MAIN_DECK_CARD_OPTIONS.map((option) => (
+                <SettingsOptionCard
+                  key={option.value}
+                  selected={cardCountDraft === option.value}
+                  supportingText="cartas de 10"
+                  value={option.value}
+                  valueText={String(option.value)}
+                />
+              ))}
+            </Radio.Group>
           </fieldset>
           <fieldset className={styles.settingsGroup}>
             <legend>Cantidad de equipos</legend>
             {validTeamCounts.length > 0 ? (
               <Radio.Group
-                className={styles.teamCountOptions}
+                block
+                aria-label="Cantidad de equipos"
+                className={`${styles.optionCardGrid} ${styles.teamOptionGrid}`}
                 name="team-count"
-                options={validTeamCounts.map((count) => ({
-                  value: count,
-                  label: getTeamCountLabel(players.length, count),
-                }))}
                 value={teamCountDraft}
                 onChange={(event) => {
                   if (isValidTeamCount(players.length, event.target.value)) {
                     setTeamCountDraft(event.target.value)
                   }
                 }}
-              />
+              >
+                {validTeamCounts.map((count) => (
+                  <SettingsOptionCard
+                    key={count}
+                    selected={teamCountDraft === count}
+                    supportingText={getTeamSizeSummary(players.length, count)}
+                    value={count}
+                    valueText={String(count)}
+                  />
+                ))}
+              </Radio.Group>
             ) : (
               <p className={styles.settingsRequirement} role="status">
                 Las opciones de equipos estarán disponibles cuando completes una lista válida de
