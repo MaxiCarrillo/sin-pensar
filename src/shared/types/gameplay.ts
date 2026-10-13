@@ -20,7 +20,8 @@ export const GAMEPLAY_STAGES = [
     name: 'Ronda 1',
     rule: 'Hablar',
     source: 'main',
-    color: 'var(--color-primary)',
+    backgroundColor: 'var(--color-primary-dark)',
+    actionColor: 'var(--color-primary)',
   },
   {
     index: 1,
@@ -29,7 +30,8 @@ export const GAMEPLAY_STAGES = [
     name: 'Ronda 2',
     rule: 'Mímica',
     source: 'main',
-    color: 'var(--color-tertiary)',
+    backgroundColor: 'var(--color-tertiary-dark)',
+    actionColor: 'var(--color-tertiary)',
   },
   {
     index: 2,
@@ -38,7 +40,8 @@ export const GAMEPLAY_STAGES = [
     name: 'Ronda 3',
     rule: 'Sonidos',
     source: 'main',
-    color: 'var(--color-secondary)',
+    backgroundColor: 'var(--color-secondary-dark)',
+    actionColor: 'var(--color-secondary)',
   },
   {
     index: 3,
@@ -47,7 +50,8 @@ export const GAMEPLAY_STAGES = [
     name: 'Relámpago',
     rule: 'Todo permitido',
     source: 'lightning',
-    color: 'var(--color-primary)',
+    backgroundColor: 'var(--color-primary-dark)',
+    actionColor: 'var(--color-primary)',
   },
 ] as const
 

@@ -87,6 +87,10 @@ function assertCircleIconButton(source, className) {
   assert.ok(tooltipStart >= 0 && tooltipEnd > classIndex, `${className} must retain its tooltip`)
 }
 
+function getJsxOpeningElementNames(source) {
+  return [...source.matchAll(/<([A-Za-z][\w.]*)\b/g)].map(([, elementName]) => elementName)
+}
+
 function createSession(playerCount, mainDeckCardCount, seed = 1) {
   const playerIds = Array.from({ length: playerCount }, (_, index) => `player-${index + 1}`)
   const setupKey = `setup-${playerCount}-${mainDeckCardCount}`
@@ -703,6 +707,7 @@ for (const className of ['backButton', 'helpButton', 'removeButton']) {
 for (const className of ['backButton', 'removePlayerButton']) {
   assertCircleIconButton(teamsPageSource, className)
 }
+assertCircleIconButton(cardsPageSource, 'selectionBackButton')
 const playerRemoveRule = getRuleBody(playersStyles, '\\.removeButton', 'Player remove button')
 assert.match(playerRemoveRule, /width:\s*40px !important;/)
 assert.match(playerRemoveRule, /min-width:\s*40px !important;/)
@@ -711,6 +716,14 @@ const teamRemoveRule = getRuleBody(teamsStyles, '\\.removePlayerButton', 'Team r
 assert.match(teamRemoveRule, /width:\s*44px !important;/)
 assert.match(teamRemoveRule, /min-width:\s*44px !important;/)
 assert.match(teamRemoveRule, /height:\s*44px !important;/)
+const selectionBackRule = getRuleBody(
+  cardsStyles,
+  '\\.selectionBackButton',
+  'Card selection back button',
+)
+assert.match(selectionBackRule, /width:\s*40px !important;/)
+assert.match(selectionBackRule, /min-width:\s*40px !important;/)
+assert.match(selectionBackRule, /height:\s*40px !important;/)
 assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
 
 const partializeSource = setupStoreSource.slice(
@@ -749,6 +762,57 @@ assert.ok(primaryBranchSource.includes('disabled={!mainQuotaIsComplete}'))
 assert.ok(primaryBranchSource.includes('Continuar a Relámpago'))
 assert.ok(!primaryBranchSource.includes('toggleLightningCard'))
 
+const primaryHeaderStart = primaryBranchSource.indexOf(
+  '<header className={styles.selectionHeader}>',
+)
+const primaryHeaderEnd = primaryBranchSource.indexOf('</header>', primaryHeaderStart)
+assert.ok(primaryHeaderStart >= 0)
+assert.ok(primaryHeaderEnd > primaryHeaderStart)
+const primaryHeaderSource = primaryBranchSource.slice(primaryHeaderStart, primaryHeaderEnd)
+assert.deepEqual(getJsxOpeningElementNames(primaryHeaderSource), ['header', 'h1', 'p'])
+assert.match(
+  primaryHeaderSource,
+  /<h1 id="main-selection-title">SELECCIÓN PRINCIPAL<\/h1>/,
+)
+assert.match(
+  primaryHeaderSource,
+  /<p className=\{styles\.progress\}>\s*\{selectedMainCount\} \/ \{mainDeckCardCount\}\s*<\/p>/,
+)
+assert.doesNotMatch(
+  primaryHeaderSource,
+  /currentPlayer|styles\.(?:eyebrow|instruction|feedback)|role="status"|aria-live=|<Button|<Tooltip/,
+)
+
+const primaryLiveRegionStart = primaryBranchSource.indexOf(
+  '<p className="visually-hidden"',
+  primaryHeaderEnd,
+)
+const primaryLiveRegionEnd = primaryBranchSource.indexOf('</p>', primaryLiveRegionStart)
+assert.ok(primaryLiveRegionStart > primaryHeaderEnd)
+assert.ok(primaryLiveRegionEnd > primaryLiveRegionStart)
+assert.equal(primaryBranchSource.match(/className="visually-hidden"/g)?.length, 1)
+const primaryLiveRegionSource = primaryBranchSource.slice(
+  primaryLiveRegionStart,
+  primaryLiveRegionEnd,
+)
+for (const contract of [
+  /role="status"/,
+  /aria-live="polite"/,
+  /aria-atomic="true"/,
+  /\{currentPlayer\.name\}/,
+  /\{feedback\}/,
+]) {
+  assert.match(primaryLiveRegionSource, contract)
+}
+
+const primaryFooterStart = primaryBranchSource.indexOf('<footer')
+const primaryFooterEnd = primaryBranchSource.indexOf('</footer>', primaryFooterStart)
+assert.ok(primaryFooterStart >= 0)
+assert.ok(primaryFooterEnd > primaryFooterStart)
+const primaryFooterSource = primaryBranchSource.slice(primaryFooterStart, primaryFooterEnd)
+assert.equal(primaryFooterSource.match(/<Button\b/g)?.length, 1)
+assert.doesNotMatch(primaryFooterSource, /<p\b/)
+
 const lightningFilterSource = cardsPageSource.slice(lightningFilterIndex, lightningMapIndex)
 assert.match(
   lightningFilterSource,
@@ -756,8 +820,186 @@ assert.match(
 )
 const lightningBranchSource = cardsPageSource.slice(lightningFilterIndex)
 assert.ok(!lightningBranchSource.includes('currentPlayerDraft.dealCardIds.map'))
-assert.ok(lightningBranchSource.includes('Cambiar principales'))
 assert.ok(lightningBranchSource.includes('disabled={!isReady}'))
+assert.ok(!cardsPageSource.includes('Cambiar principales'))
+
+const lightningHeaderStart = lightningBranchSource.indexOf(
+  '<header className={`${styles.selectionHeader} ${styles.lightningSelectionHeader}`}>',
+)
+const lightningHeaderEnd = lightningBranchSource.indexOf('</header>', lightningHeaderStart)
+assert.ok(lightningHeaderStart >= 0)
+assert.ok(lightningHeaderEnd > lightningHeaderStart)
+const lightningHeaderSource = lightningBranchSource.slice(
+  lightningHeaderStart,
+  lightningHeaderEnd,
+)
+assert.deepEqual(getJsxOpeningElementNames(lightningHeaderSource), [
+  'header',
+  'Tooltip',
+  'Button',
+  'ArrowLeftOutlined',
+  'h1',
+  'p',
+])
+assert.match(
+  lightningHeaderSource,
+  /<h1 id="lightning-selection-title">SELECCIÓN RELÁMPAGO<\/h1>/,
+)
+assert.match(
+  lightningHeaderSource,
+  /<p className=\{`\$\{styles\.progress\} \$\{styles\.lightningProgress\}`\}>\s*\{lightningSelectedCount\} \/ 1\s*<\/p>/,
+)
+assert.doesNotMatch(
+  lightningHeaderSource,
+  /currentPlayer|styles\.(?:eyebrow|instruction|feedback)|role="status"|aria-live=/,
+)
+
+const { buttonSource: selectionBackButtonSource, classIndex: selectionBackButtonIndex } =
+  getAntdButtonSource(cardsPageSource, 'selectionBackButton')
+for (const contract of [
+  /shape="circle"/,
+  /icon=\{<ArrowLeftOutlined \/>\}/,
+  /aria-label="Volver a selección principal"/,
+  /onClick=\{handleEditMain\}/,
+]) {
+  assert.match(selectionBackButtonSource, contract)
+}
+assert.ok(lightningHeaderSource.includes('className={styles.selectionBackButton}'))
+const selectionBackTooltipStart = cardsPageSource.lastIndexOf(
+  '<Tooltip',
+  selectionBackButtonIndex,
+)
+const selectionBackTooltipEnd = cardsPageSource.indexOf('</Tooltip>', selectionBackButtonIndex)
+assert.ok(selectionBackTooltipStart >= 0)
+assert.ok(selectionBackTooltipEnd > selectionBackButtonIndex)
+assert.match(
+  cardsPageSource.slice(selectionBackTooltipStart, selectionBackTooltipEnd),
+  /<Tooltip title="Volver a selección principal">/,
+)
+
+const lightningLiveRegionStart = lightningBranchSource.indexOf(
+  '<p className="visually-hidden"',
+  lightningHeaderEnd,
+)
+const lightningLiveRegionEnd = lightningBranchSource.indexOf('</p>', lightningLiveRegionStart)
+assert.ok(lightningLiveRegionStart > lightningHeaderEnd)
+assert.ok(lightningLiveRegionEnd > lightningLiveRegionStart)
+assert.equal(lightningBranchSource.match(/className="visually-hidden"/g)?.length, 1)
+const lightningLiveRegionSource = lightningBranchSource.slice(
+  lightningLiveRegionStart,
+  lightningLiveRegionEnd,
+)
+for (const contract of [
+  /role="status"/,
+  /aria-live="polite"/,
+  /aria-atomic="true"/,
+  /\{currentPlayer\.name\}/,
+  /\{feedback\}/,
+]) {
+  assert.match(lightningLiveRegionSource, contract)
+}
+
+const lightningFooterStart = lightningBranchSource.indexOf('<footer')
+const lightningFooterEnd = lightningBranchSource.indexOf('</footer>', lightningFooterStart)
+assert.ok(lightningFooterStart >= 0)
+assert.ok(lightningFooterEnd > lightningFooterStart)
+const lightningFooterSource = lightningBranchSource.slice(
+  lightningFooterStart,
+  lightningFooterEnd,
+)
+assert.equal(lightningFooterSource.match(/<Button\b/g)?.length, 1)
+assert.ok(lightningFooterSource.includes('Guardar selección'))
+assert.doesNotMatch(lightningFooterSource, /<p\b|handleEditMain/)
+
+for (const helpId of ['main-selection-help', 'lightning-selection-help']) {
+  assert.ok(!cardsPageSource.includes(helpId))
+}
+assert.doesNotMatch(cardsPageSource, /aria-describedby=/)
+assert.doesNotMatch(cardsStyles, /\.(?:instruction|feedback|saveHelp)\b/)
+
+const selectionHeaderRule = getRuleBody(
+  cardsStyles,
+  '\\.selectionHeader',
+  'Compact card selection header',
+)
+assert.match(selectionHeaderRule, /min-width:\s*0;/)
+assert.match(selectionHeaderRule, /grid-template-columns:\s*minmax\(0, 1fr\);/)
+assert.match(selectionHeaderRule, /grid-template-areas:\s*'title'\s*'progress';/)
+assert.match(selectionHeaderRule, /align-items:\s*center;/)
+assert.match(selectionHeaderRule, /row-gap:\s*4px;/)
+const lightningHeaderRule = getRuleBody(
+  cardsStyles,
+  '\\.lightningSelectionHeader',
+  'Compact lightning selection header',
+)
+assert.match(
+  lightningHeaderRule,
+  /grid-template-columns:\s*40px minmax\(0, 1fr\) 40px;/,
+)
+assert.match(
+  lightningHeaderRule,
+  /grid-template-areas:\s*'back title balance'\s*'progress progress progress';/,
+)
+assert.match(selectionBackRule, /grid-area:\s*back;/)
+assert.match(selectionBackRule, /align-self:\s*center;/)
+const lightningBalanceRule = getRuleBody(
+  cardsStyles,
+  '\\.lightningSelectionHeader::after',
+  'Lightning header balancing spacer',
+)
+assert.match(lightningBalanceRule, /content:\s*'';/)
+assert.match(lightningBalanceRule, /width:\s*40px;/)
+assert.match(lightningBalanceRule, /height:\s*40px;/)
+assert.match(lightningBalanceRule, /grid-area:\s*balance;/)
+const selectionTitleRule = getRuleBody(
+  cardsStyles,
+  '\\.selectionHeader h1',
+  'Compact card selection title',
+)
+assert.match(selectionTitleRule, /width:\s*100%;/)
+assert.match(selectionTitleRule, /min-width:\s*0;/)
+assert.match(selectionTitleRule, /grid-area:\s*title;/)
+assert.match(selectionTitleRule, /justify-self:\s*center;/)
+assert.match(selectionTitleRule, /overflow-wrap:\s*anywhere;/)
+assert.match(selectionTitleRule, /text-align:\s*center;/)
+const selectionProgressRule = getRuleBody(
+  cardsStyles,
+  '\\.progress',
+  'Compact card selection progress',
+)
+assert.match(selectionProgressRule, /grid-area:\s*progress;/)
+assert.match(selectionProgressRule, /justify-self:\s*center;/)
+assert.match(selectionProgressRule, /text-align:\s*center;/)
+
+for (const [label, selectorPattern] of [
+  ['Handoff content', '\\.handoffContent'],
+  ['Handoff reveal action', '\\.revealButton'],
+  ['Completion icon', '\\.completionIcon'],
+  ['Completion copy', '\\.completionCopy'],
+  ['Completion actions', '\\.completionActions'],
+  ['Selection header', '\\.selectionHeader'],
+  ['Selection card item', '\\.cardList li'],
+  ['Selection footer', '\\.selectionActions'],
+]) {
+  assert.match(
+    getRuleBody(cardsStyles, selectorPattern, `${label} entry animation`),
+    /animation:\s*card-flow-enter \d+ms ease-out(?: \d+ms)? both;/,
+  )
+}
+const cardFlowAnimation = cardsStyles.match(
+  /@keyframes card-flow-enter\s*\{([\s\S]*?)\n\}/,
+)?.[1]
+assert.ok(cardFlowAnimation, 'Missing card-flow-enter keyframes')
+assert.match(cardFlowAnimation, /from\s*\{[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translateY\(/)
+assert.match(
+  cardFlowAnimation,
+  /to\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*translateY\(0\);/,
+)
+assert.doesNotMatch(cardFlowAnimation, /scale\(|infinite|flash/i)
+assert.match(
+  cardsStyles,
+  /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.handoffContent,\s*\.revealButton,\s*\.completionIcon,\s*\.completionCopy,\s*\.completionActions,\s*\.selectionHeader,\s*\.cardList li,\s*\.selectionActions\s*\{[^}]*animation:\s*none;/,
+)
 
 for (const removedCategoryLabel of ['TÍTULOS', 'PERSONAJES', 'TODO']) {
   assert.ok(!draftCardSource.includes(removedCategoryLabel))
@@ -893,5 +1135,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, compact selection headers with hidden live feedback and accessible Relámpago back action=valid, completion and card-flow reduced-motion-safe entry animations=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
 )

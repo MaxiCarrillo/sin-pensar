@@ -49,6 +49,7 @@
   gap: var(--space-md);
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  animation: card-flow-enter 240ms ease-out both;
 }
 
 .turnLabel {
@@ -111,8 +112,12 @@
 .selectionActions button {
   min-height: 48px;
   border-radius: var(--radius-control-pill);
-  font-weight: var(--font-weight-extrabold);
+  font-weight: var(--font-weight-bold);
   white-space: normal;
+}
+
+.revealButton {
+  animation: card-flow-enter 220ms ease-out 80ms both;
 }
 
 .completion {
@@ -131,12 +136,14 @@
 .completionIcon {
   color: var(--color-tertiary-dark);
   font-size: 4rem;
+  animation: card-flow-enter 220ms ease-out both;
 }
 
 .completionCopy {
   display: grid;
   max-width: 20rem;
   gap: var(--space-sm);
+  animation: card-flow-enter 240ms ease-out 60ms both;
 }
 
 .completionCopy h1 {
@@ -153,6 +160,7 @@
   display: grid;
   width: 100%;
   gap: var(--space-sm);
+  animation: card-flow-enter 220ms ease-out 120ms both;
 }
 
 .selectionLayout {
@@ -165,44 +173,62 @@
 .selectionHeader {
   display: grid;
   min-width: 0;
-  gap: 4px;
-  text-align: center;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'title'
+    'progress';
+  align-items: center;
+  row-gap: 4px;
+  animation: card-flow-enter 220ms ease-out both;
+}
+
+.lightningSelectionHeader {
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-areas:
+    'back title balance'
+    'progress progress progress';
+}
+
+.lightningSelectionHeader::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  grid-area: balance;
 }
 
 .selectionHeader h1 {
+  width: 100%;
+  min-width: 0;
+  grid-area: title;
+  justify-self: center;
   color: var(--color-primary-dark);
   font-size: var(--font-size-lg);
   line-height: 1.1;
   overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .progress {
+  grid-area: progress;
+  justify-self: center;
   color: var(--color-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-extrabold);
+  text-align: center;
+  white-space: nowrap;
 }
 
 .lightningProgress {
   color: var(--color-secondary-dark);
 }
 
-.instruction,
-.feedback,
-.saveHelp {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-
-.instruction,
-.saveHelp {
-  color: var(--color-text-muted);
-}
-
-.feedback {
-  min-height: 1rem;
-  color: var(--color-primary-dark);
+.selectionBackButton {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  grid-area: back;
+  align-self: center;
+  justify-self: start;
 }
 
 .cardScroller {
@@ -229,6 +255,7 @@
 
 .cardList li {
   min-width: 0;
+  animation: card-flow-enter 220ms ease-out 60ms both;
 }
 
 .selectionActions {
@@ -237,10 +264,19 @@
   padding-top: var(--space-xs);
   border-top: 1px solid var(--color-border);
   background: var(--color-background);
+  animation: card-flow-enter 220ms ease-out 100ms both;
 }
 
-.saveHelp {
-  text-align: center;
+@keyframes card-flow-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-xs));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 350px) {
@@ -254,5 +290,18 @@
 
   .selectionHeader h1 {
     font-size: var(--font-size-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoffContent,
+  .revealButton,
+  .completionIcon,
+  .completionCopy,
+  .completionActions,
+  .selectionHeader,
+  .cardList li,
+  .selectionActions {
+    animation: none;
   }
 }

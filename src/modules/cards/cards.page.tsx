@@ -1,5 +1,5 @@
-import { CheckCircleFilled } from '@ant-design/icons'
-import { Button } from 'antd'
+import { ArrowLeftOutlined, CheckCircleFilled } from '@ant-design/icons'
+import { Button, Tooltip } from 'antd'
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router'
 import { useShallow } from 'zustand/react/shallow'
@@ -180,7 +180,7 @@ function CardsPage() {
             <p className={styles.turnLabel}>Turno de:</p>
             <h1 id="handoff-player">{currentPlayer.name}</h1>
             <p className={styles.privacyInstruction}>
-              Pasá el dispositivo a esta persona. Solo ella debe ver la siguiente pantalla.
+              Pasá el dispositivo a esta persona. Solo él debe ver la siguiente pantalla.
             </p>
             <div className={styles.deckSummary}>
               <span>MAZO PRINCIPAL</span>
@@ -237,25 +237,23 @@ function CardsPage() {
   }
 
   if (isChoosingMain) {
-    const remainingMainCount = mainDeckCardCount - selectedMainCount
-    const mainInstruction = mainQuotaIsComplete
-      ? 'La selección principal está completa.'
-      : `Elegí ${remainingMainCount} carta${remainingMainCount === 1 ? '' : 's'} principal${remainingMainCount === 1 ? '' : 'es'} más.`
-
     return (
       <main className={styles.page}>
-        <section className={styles.selectionLayout} aria-labelledby="main-selection-title">
+        <section
+          key="main-selection"
+          className={styles.selectionLayout}
+          aria-labelledby="main-selection-title"
+        >
           <header className={styles.selectionHeader}>
-            <p className={styles.eyebrow}>SELECCIÓN PRINCIPAL</p>
-            <h1 id="main-selection-title">{currentPlayer.name}</h1>
+            <h1 id="main-selection-title">SELECCIÓN PRINCIPAL</h1>
             <p className={styles.progress}>
               {selectedMainCount} / {mainDeckCardCount}
             </p>
-            <p className={styles.instruction}>{mainInstruction}</p>
-            <p className={styles.feedback} role="status" aria-live="polite">
-              {feedback}
-            </p>
           </header>
+          <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+            {currentPlayer.name}: {selectedMainCount} de {mainDeckCardCount} cartas principales
+            seleccionadas. {feedback}
+          </p>
 
           <div className={styles.cardScroller}>
             <ul className={styles.cardList} aria-label="Cartas para la selección principal">
@@ -289,14 +287,10 @@ function CardsPage() {
               size="large"
               block
               disabled={!mainQuotaIsComplete}
-              aria-describedby="main-selection-help"
               onClick={handleConfirmMain}
             >
               Continuar a Relámpago
             </Button>
-            <p id="main-selection-help" className={styles.saveHelp}>
-              Elegí exactamente {mainDeckCardCount} cartas principales para continuar.
-            </p>
           </footer>
         </section>
       </main>
@@ -341,20 +335,31 @@ function CardsPage() {
 
   return (
     <main className={styles.page}>
-      <section className={styles.selectionLayout} aria-labelledby="lightning-selection-title">
-        <header className={styles.selectionHeader}>
-          <p className={styles.eyebrow}>SELECCIÓN RELÁMPAGO</p>
-          <h1 id="lightning-selection-title">Carta Relámpago de {currentPlayer.name}</h1>
+      <section
+        key="lightning-selection"
+        className={styles.selectionLayout}
+        aria-labelledby="lightning-selection-title"
+      >
+        <header className={`${styles.selectionHeader} ${styles.lightningSelectionHeader}`}>
+          <Tooltip title="Volver a selección principal">
+            <Button
+              className={styles.selectionBackButton}
+              type="primary"
+              shape="circle"
+              icon={<ArrowLeftOutlined />}
+              aria-label="Volver a selección principal"
+              onClick={handleEditMain}
+            />
+          </Tooltip>
+          <h1 id="lightning-selection-title">SELECCIÓN RELÁMPAGO</h1>
           <p className={`${styles.progress} ${styles.lightningProgress}`}>
             {lightningSelectedCount} / 1
           </p>
-          <p className={styles.instruction}>
-            Elegí 1 carta entre las que no seleccionaste como principales.
-          </p>
-          <p className={styles.feedback} role="status" aria-live="polite">
-            {feedback}
-          </p>
         </header>
+        <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+          {currentPlayer.name}: {lightningSelectedCount} de 1 carta Relámpago seleccionada.{' '}
+          {feedback}
+        </p>
 
         <div className={styles.cardScroller}>
           <ul className={styles.cardList} aria-label="Cartas disponibles para Relámpago">
@@ -380,24 +385,15 @@ function CardsPage() {
         </div>
 
         <footer className={styles.selectionActions} aria-label="Acciones de Relámpago">
-          <Button size="large" block onClick={handleEditMain}>
-            Cambiar principales
-          </Button>
           <Button
             type="primary"
             size="large"
             block
             disabled={!isReady}
-            aria-describedby="lightning-selection-help"
             onClick={handleSave}
           >
             Guardar selección
           </Button>
-          <p id="lightning-selection-help" className={styles.saveHelp}>
-            {isReady
-              ? 'Se guardará y ocultará la selección antes del próximo turno.'
-              : 'Elegí 1 carta Relámpago para guardar.'}
-          </p>
         </footer>
       </section>
     </main>

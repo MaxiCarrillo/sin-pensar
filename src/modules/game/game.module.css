@@ -18,13 +18,14 @@
 
 .activePage {
   --timer-progress: 0%;
-  --stage-color: var(--color-primary);
+  --stage-background-color: var(--color-primary-dark);
+  --stage-action-color: var(--color-primary);
 }
 
 .activePage::before {
   background: linear-gradient(
     to top,
-    var(--stage-color) 0 var(--timer-progress),
+    var(--stage-background-color) 0 var(--timer-progress),
     var(--color-background) var(--timer-progress) 100%
   );
 }
@@ -176,6 +177,7 @@
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--color-surface) 88%, transparent);
   backdrop-filter: blur(6px);
+  animation: active-game-enter 220ms ease-out both;
 }
 
 .activeHeader > div {
@@ -205,6 +207,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  animation: active-game-enter 240ms ease-out 60ms both;
 }
 
 .status {
@@ -214,10 +217,18 @@
   font-weight: var(--font-weight-bold);
   line-height: 1.2;
   text-align: center;
+  animation: active-game-enter 200ms ease-out 120ms both;
+}
+
+.status:not(:empty) {
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(6px);
 }
 
 .terminalContent {
-  color: var(--color-text-strong);
+  color: var(--color-surface);
 }
 
 .terminalContent h1 {
@@ -346,6 +357,18 @@
   gap: var(--space-sm);
 }
 
+@keyframes active-game-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-xs));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 350px) {
   .page {
     padding-inline: var(--space-sm);
@@ -357,5 +380,13 @@
 
   .turnSummary {
     grid-template-columns: 1.25fr 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activeHeader,
+  .cardViewport,
+  .status {
+    animation: none;
   }
 }

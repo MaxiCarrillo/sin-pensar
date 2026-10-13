@@ -111,7 +111,8 @@ function ActiveTurnView({
   })
   const pageStyle = {
     '--timer-progress': `${progress * 100}%`,
-    '--stage-color': stage.color,
+    '--stage-background-color': stage.backgroundColor,
+    '--stage-action-color': stage.actionColor,
   } as CSSProperties
 
   if (!card) {
@@ -144,12 +145,12 @@ function ActiveTurnView({
         <div className={styles.cardViewport}>
           <GameplayCard card={card} onDecision={onDecision} />
         </div>
-        <p className={styles.status} role="status" aria-live="polite">
+        {/* <p className={styles.status} role="status" aria-live="polite">
           {statusMessage}
-        </p>
-        <p className="visually-hidden" aria-live="polite" aria-atomic="true">
+        </p> */}
+        {/* <p className="visually-hidden" aria-live="polite" aria-atomic="true">
           {liveAnnouncement}
-        </p>
+        </p> */}
       </section>
     </main>
   )
@@ -299,7 +300,7 @@ function GamePage() {
     const result = startTurn(Date.now())
     setStatusMessage(
       result.kind === 'success'
-        ? 'Turno iniciado. Abajo es acierto; arriba es pasar.'
+        ? ''
         : 'No se pudo iniciar el turno.',
     )
   }

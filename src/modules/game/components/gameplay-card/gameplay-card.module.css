@@ -8,11 +8,15 @@
 }
 
 .instruction {
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   line-height: 1.3;
   text-align: center;
+  backdrop-filter: blur(6px);
 }
 
 .cardStack {
@@ -206,6 +210,10 @@
   min-height: 48px;
   border-radius: var(--radius-control-pill);
   font-weight: var(--font-weight-extrabold);
+}
+
+.actions .correctButton:not(:disabled) {
+  background: var(--stage-action-color);
 }
 
 @media (max-height: 680px) {

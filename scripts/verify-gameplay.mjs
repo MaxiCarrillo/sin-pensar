@@ -68,6 +68,31 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
+function getHexLuminance(hex) {
+  assert.match(hex, /^#(?:[\da-f]{3}|[\da-f]{6})$/i)
+  const digits = hex.slice(1)
+  const channelPairs =
+    digits.length === 3
+      ? [...digits].map((digit) => digit.repeat(2))
+      : [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 6)]
+  const [red, green, blue] = channelPairs
+    .map((channel) => Number.parseInt(channel, 16) / 255)
+    .map((channel) =>
+      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+    )
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+function getHexContrastRatio(firstHex, secondHex) {
+  const firstLuminance = getHexLuminance(firstHex)
+  const secondLuminance = getHexLuminance(secondHex)
+  const lighter = Math.max(firstLuminance, secondLuminance)
+  const darker = Math.min(firstLuminance, secondLuminance)
+
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
 function getRuleBody(source, selectorPattern, label) {
   const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
   assert.ok(rule, `Missing CSS rule: ${label}`)
@@ -772,6 +797,26 @@ assert.match(handoffSource, /GAMEPLAY_PHASES\.concealedActive/)
 assert.match(handoffSource, /game\.pendingCardIds\.length/)
 assert.match(gamePageSource, /blockInitialActiveCard/)
 assert.match(gamePageSource, /setBlockInitialActiveCard\(false\)[\s\S]*startTurn\(Date\.now\(\)\)/)
+const removedInitialStatus = [
+  'Turno iniciado',
+  'Abajo es acierto; arriba es pasar',
+].join('. ')
+assert.ok(!gamePageSource.includes(removedInitialStatus))
+const handleRevealStart = gamePageSource.indexOf('const handleReveal = () => {')
+const handleRevealEnd = gamePageSource.indexOf('const handleDecision', handleRevealStart)
+assert.ok(handleRevealStart >= 0 && handleRevealEnd > handleRevealStart)
+const handleRevealSource = gamePageSource.slice(handleRevealStart, handleRevealEnd)
+assert.match(
+  handleRevealSource,
+  /result\.kind === 'success'\s*\?\s*''\s*:\s*'No se pudo iniciar el turno\.'/,
+)
+for (const meaningfulStatus of [
+  'No se pudo aplicar esa acción.',
+  'El tiempo terminó antes de resolver la carta.',
+  'Carta pasada. Sigue disponible en este turno.',
+]) {
+  assert.ok(gamePageSource.includes(meaningfulStatus))
+}
 const routePrivacyEffectStart = gamePageSource.indexOf('useEffect(() => {')
 const routePrivacyEffectEnd = gamePageSource.indexOf('}, [])', routePrivacyEffectStart)
 assert.ok(routePrivacyEffectStart >= 0 && routePrivacyEffectEnd > routePrivacyEffectStart)
@@ -824,6 +869,20 @@ assert.match(gameplayCardSource, /aria-disabled=\{isResolving\}/)
 assert.match(gameplayCardSource, /↓ Acertó/)
 assert.match(gameplayCardSource, /↑ Pasar/)
 assert.doesNotMatch(gameplayCardSource, /selectedMain|selectedLightning|unselected/)
+
+const gameplayActionsStart = gameplayCardSource.indexOf(
+  '<div className={styles.actions} aria-label="Acciones de la carta">',
+)
+const gameplayActionsEnd = gameplayCardSource.indexOf('</div>', gameplayActionsStart)
+assert.ok(gameplayActionsStart >= 0 && gameplayActionsEnd > gameplayActionsStart)
+const gameplayActionsSource = gameplayCardSource.slice(gameplayActionsStart, gameplayActionsEnd)
+const passActionIndex = gameplayActionsSource.indexOf("onClick={() => commitDecision('pass')}")
+const correctActionIndex = gameplayActionsSource.indexOf(
+  "onClick={() => commitDecision('correct')}",
+)
+assert.ok(passActionIndex >= 0 && correctActionIndex > passActionIndex)
+assert.match(gameplayActionsSource, /className=\{styles\.correctButton\}/)
+assert.equal(gameplayActionsSource.match(/disabled=\{isResolving\}/g)?.length, 2)
 
 const gameplayCardRule = gameplayCardStyles.match(/^\.card\s*\{([^}]*)\}/m)
 assert.ok(gameplayCardRule)
@@ -892,6 +951,19 @@ assertRuleUsesPill(
   '\\.actions button',
   'Visible pass and correct buttons',
 )
+const correctButtonRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.correctButton:not\\(:disabled\\)',
+  'Stage-aware correct action',
+)
+assert.match(correctButtonRule, /border-color:\s*var\(--stage-action-color\);/)
+assert.match(correctButtonRule, /color:\s*var\(--color-text-strong\);/)
+assert.match(correctButtonRule, /background:\s*var\(--stage-action-color\);/)
+assert.match(
+  correctButtonRule,
+  /box-shadow:\s*0 0 0 1px var\(--color-text-strong\), var\(--shadow-control\);/,
+)
+assert.doesNotMatch(correctButtonRule, /#[\da-f]{3,8}\b/i)
 
 const outgoingCardStart = gameplayCardSource.indexOf('{outgoingCard ? (')
 const outgoingCardEnd = gameplayCardSource.indexOf(') : null}', outgoingCardStart)
@@ -930,22 +1002,129 @@ assert.match(
 )
 
 assert.match(gamePageSource, /'--timer-progress': `\$\{progress \* 100\}%`/)
-assert.match(gameStyles, /\.activePage::before\s*\{[^}]*linear-gradient\([\s\S]*var\(--timer-progress\)/)
+assert.match(
+  gamePageSource,
+  /'--stage-background-color': stage\.backgroundColor,[\s\S]*'--stage-action-color': stage\.actionColor/,
+)
+assert.deepEqual(
+  GAMEPLAY_STAGES.map(({ kind, backgroundColor, actionColor }) => ({
+    kind,
+    backgroundColor,
+    actionColor,
+  })),
+  [
+    {
+      kind: 'talk',
+      backgroundColor: 'var(--color-primary-dark)',
+      actionColor: 'var(--color-primary)',
+    },
+    {
+      kind: 'mime',
+      backgroundColor: 'var(--color-tertiary-dark)',
+      actionColor: 'var(--color-tertiary)',
+    },
+    {
+      kind: 'sounds',
+      backgroundColor: 'var(--color-secondary-dark)',
+      actionColor: 'var(--color-secondary)',
+    },
+    {
+      kind: 'lightning',
+      backgroundColor: 'var(--color-primary-dark)',
+      actionColor: 'var(--color-primary)',
+    },
+  ],
+)
+const activePageRule = getRuleBody(gameStyles, '\\.activePage', 'Active game stage tokens')
+assert.match(activePageRule, /--stage-background-color:\s*var\(--color-primary-dark\);/)
+assert.match(activePageRule, /--stage-action-color:\s*var\(--color-primary\);/)
+assert.match(
+  gameStyles,
+  /\.activePage::before\s*\{[^}]*linear-gradient\([\s\S]*var\(--stage-background-color\) 0 var\(--timer-progress\),[\s\S]*var\(--color-background\) var\(--timer-progress\) 100%/,
+)
 assert.match(gameStyles, /\.timeoutPage::before\s*\{\s*background:\s*var\(--color-secondary\);/)
 assert.match(gameStyles, /\.gameCompletePage::before\s*\{\s*background:\s*var\(--color-primary\);/)
+
+for (const [label, selectorPattern] of [
+  ['Active header', '\\.activeHeader'],
+  ['Active card and action region', '\\.cardViewport'],
+  ['Active status', '\\.status'],
+]) {
+  assert.match(
+    getRuleBody(gameStyles, selectorPattern, `${label} entry animation`),
+    /animation:\s*active-game-enter \d+ms ease-out(?: \d+ms)? both;/,
+  )
+}
+const activeGameAnimation = gameStyles.match(
+  /@keyframes active-game-enter\s*\{([\s\S]*?)\n\}/,
+)?.[1]
+assert.ok(activeGameAnimation, 'Missing active-game-enter keyframes')
+assert.match(
+  activeGameAnimation,
+  /from\s*\{[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translateY\(/,
+)
+assert.match(
+  activeGameAnimation,
+  /to\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*translateY\(0\);/,
+)
+assert.doesNotMatch(activeGameAnimation, /scale\(|infinite|flash/i)
+assert.match(
+  gameStyles,
+  /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.activeHeader,\s*\.cardViewport,\s*\.status\s*\{[^}]*animation:\s*none;/,
+)
 assertRuleUsesPill(
   gameStyles,
   '\\.bottomButton,\\s*\\.resultActions button',
   'Gameplay handoff, terminal, and result buttons',
 )
+assert.match(
+  getRuleBody(gameStyles, '\\.terminalContent', 'Terminal content'),
+  /color:\s*var\(--color-text-strong\);/,
+)
 
 const rootTokens = getRootTokens(globalStyles)
 assert.equal(rootTokens.get('--color-surface'), '#fff')
 assert.equal(rootTokens.get('--color-primary'), '#00aab7')
+assert.equal(rootTokens.get('--color-primary-dark'), '#007f89')
 assert.equal(rootTokens.get('--color-secondary'), '#de2c6e')
+assert.equal(rootTokens.get('--color-secondary-dark'), '#b91f59')
 assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
+assert.equal(rootTokens.get('--color-tertiary-dark'), '#0c8c6c')
+assert.equal(rootTokens.get('--color-text-strong'), '#000')
 assert.equal(rootTokens.get('--radius-control-pill'), '999px')
 assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
+const strongTextColor = resolveRootToken(rootTokens, '--color-text-strong')
+for (const actionToken of [
+  '--color-primary',
+  '--color-tertiary',
+  '--color-secondary',
+]) {
+  const contrastRatio = getHexContrastRatio(
+    resolveRootToken(rootTokens, actionToken),
+    strongTextColor,
+  )
+  assert.ok(
+    contrastRatio >= 4.5,
+    `${actionToken} must have at least 4.5:1 contrast against --color-text-strong; received ${contrastRatio.toFixed(2)}:1`,
+  )
+}
+
+// The 1px --color-text-strong box-shadow is the action boundary against dark stage backgrounds.
+for (const backgroundToken of [
+  '--color-primary-dark',
+  '--color-tertiary-dark',
+  '--color-secondary-dark',
+]) {
+  const contrastRatio = getHexContrastRatio(
+    resolveRootToken(rootTokens, backgroundToken),
+    strongTextColor,
+  )
+  assert.ok(
+    contrastRatio >= 3,
+    `${backgroundToken} must give the action boundary at least 3:1 contrast; received ${contrastRatio.toFixed(2)}:1`,
+  )
+}
+
 const expectedCardTokenValues = new Map([
   ['--color-card-surface', 'var(--color-surface)'],
   ['--color-card-band-title', 'var(--color-secondary)'],
@@ -1023,5 +1202,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
+  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, empty initial active status with later feedback retained, dark-background/normal-action stage pairings, reduced-motion-safe active entry animation, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
 )
