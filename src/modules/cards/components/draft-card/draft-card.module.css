@@ -2,7 +2,11 @@
   position: relative;
   display: grid;
   box-sizing: border-box;
+  aspect-ratio: 16 / 9;
   width: 100%;
+  max-width: 300px;
+  height: clamp(400px, 62dvh, 500px);
+
   min-height: 490px;
   padding: 0;
   grid-template-rows: minmax(44px, auto) repeat(3, minmax(100px, auto)) minmax(118px, auto);

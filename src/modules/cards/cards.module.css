@@ -224,6 +224,7 @@
   grid-auto-rows: max-content;
   gap: var(--space-lg);
   list-style: none;
+  justify-items: center;
 }
 
 .cardList li {
