@@ -260,6 +260,7 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
             </div>
             <div className={styles.actions} aria-label="Acciones de la carta">
                 <Button
+                    className={styles.passButton}
                     size="large"
                     disabled={isResolving}
                     aria-keyshortcuts="ArrowUp"

@@ -145,12 +145,12 @@ function ActiveTurnView({
         <div className={styles.cardViewport}>
           <GameplayCard card={card} onDecision={onDecision} />
         </div>
-        {/* <p className={styles.status} role="status" aria-live="polite">
+        <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {statusMessage}
-        </p> */}
-        {/* <p className="visually-hidden" aria-live="polite" aria-atomic="true">
+        </p>
+        <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {liveAnnouncement}
-        </p> */}
+        </p>
       </section>
     </main>
   )

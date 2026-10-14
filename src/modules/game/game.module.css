@@ -210,23 +210,6 @@
   animation: active-game-enter 240ms ease-out 60ms both;
 }
 
-.status {
-  min-height: 1rem;
-  color: var(--color-text);
-  font-size: 0.6875rem;
-  font-weight: var(--font-weight-bold);
-  line-height: 1.2;
-  text-align: center;
-  animation: active-game-enter 200ms ease-out 120ms both;
-}
-
-.status:not(:empty) {
-  padding: 2px var(--space-xs);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  backdrop-filter: blur(6px);
-}
-
 .terminalContent {
   color: var(--color-surface);
 }
@@ -385,8 +368,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .activeHeader,
-  .cardViewport,
-  .status {
+  .cardViewport {
     animation: none;
   }
 }

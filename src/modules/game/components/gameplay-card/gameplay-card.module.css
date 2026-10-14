@@ -212,8 +212,55 @@
   font-weight: var(--font-weight-extrabold);
 }
 
+.actions .passButton:not(:disabled) {
+  border-color: var(--color-border) !important;
+  color: var(--stage-action-color) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-control) !important;
+}
+
+.actions .passButton:not(:disabled):hover {
+  border-color: var(--color-border) !important;
+  color: var(--stage-background-color) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-control) !important;
+}
+
+.actions .passButton:not(:disabled):focus-visible {
+  border-color: var(--color-border) !important;
+  color: var(--stage-action-color) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-control) !important;
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.actions .passButton:not(:disabled):active {
+  border-color: var(--color-border) !important;
+  color: var(--stage-action-color) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-control) !important;
+}
+
 .actions .correctButton:not(:disabled) {
   background: var(--stage-action-color);
+}
+
+.actions .correctButton:not(:disabled):hover {
+  border-color: var(--stage-action-color) !important;
+  background: var(--stage-action-color) !important;
+}
+
+.actions .correctButton:not(:disabled):focus-visible {
+  border-color: var(--stage-action-color) !important;
+  background: var(--stage-action-color) !important;
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.actions .correctButton:not(:disabled):active {
+  border-color: var(--stage-action-color) !important;
+  background: var(--stage-action-color) !important;
 }
 
 @media (max-height: 680px) {

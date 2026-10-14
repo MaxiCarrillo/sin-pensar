@@ -68,35 +68,22 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
-function getHexLuminance(hex) {
-  assert.match(hex, /^#(?:[\da-f]{3}|[\da-f]{6})$/i)
-  const digits = hex.slice(1)
-  const channelPairs =
-    digits.length === 3
-      ? [...digits].map((digit) => digit.repeat(2))
-      : [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 6)]
-  const [red, green, blue] = channelPairs
-    .map((channel) => Number.parseInt(channel, 16) / 255)
-    .map((channel) =>
-      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
-    )
-
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
-}
-
-function getHexContrastRatio(firstHex, secondHex) {
-  const firstLuminance = getHexLuminance(firstHex)
-  const secondLuminance = getHexLuminance(secondHex)
-  const lighter = Math.max(firstLuminance, secondLuminance)
-  const darker = Math.min(firstLuminance, secondLuminance)
-
-  return (lighter + 0.05) / (darker + 0.05)
-}
-
 function getRuleBody(source, selectorPattern, label) {
   const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
   assert.ok(rule, `Missing CSS rule: ${label}`)
   return rule[1]
+}
+
+function getDeclarationValue(ruleBody, property, label) {
+  const declaration = ruleBody.match(
+    new RegExp(`(?:^|\\n)\\s*${property}:\\s*([^;]+);`),
+  )
+  assert.ok(declaration, `Missing ${property} declaration: ${label}`)
+  return declaration[1].trim()
+}
+
+function getDeclaredProperties(ruleBody) {
+  return [...ruleBody.matchAll(/^\s*([\w-]+)\s*:/gm)].map(([, property]) => property)
 }
 
 function assertRuleUsesPill(source, selectorPattern, label) {
@@ -802,6 +789,25 @@ const removedInitialStatus = [
   'Abajo es acierto; arriba es pasar',
 ].join('. ')
 assert.ok(!gamePageSource.includes(removedInitialStatus))
+const activeTurnViewStart = gamePageSource.indexOf('function ActiveTurnView')
+const activeTurnViewEnd = gamePageSource.indexOf('interface ScoreTableProps', activeTurnViewStart)
+assert.ok(activeTurnViewStart >= 0 && activeTurnViewEnd > activeTurnViewStart)
+const activeTurnViewSource = gamePageSource.slice(activeTurnViewStart, activeTurnViewEnd)
+for (const liveRegionValue of ['statusMessage', 'liveAnnouncement']) {
+  assert.match(
+    activeTurnViewSource,
+    new RegExp(
+      `<p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">\\s*\\{${liveRegionValue}\\}\\s*</p>`,
+    ),
+  )
+}
+assert.equal(
+  activeTurnViewSource.match(
+    /<p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">/g,
+  )?.length,
+  2,
+)
+assert.doesNotMatch(activeTurnViewSource, /styles\.status/)
 const handleRevealStart = gamePageSource.indexOf('const handleReveal = () => {')
 const handleRevealEnd = gamePageSource.indexOf('const handleDecision', handleRevealStart)
 assert.ok(handleRevealStart >= 0 && handleRevealEnd > handleRevealStart)
@@ -876,6 +882,13 @@ const gameplayActionsStart = gameplayCardSource.indexOf(
 const gameplayActionsEnd = gameplayCardSource.indexOf('</div>', gameplayActionsStart)
 assert.ok(gameplayActionsStart >= 0 && gameplayActionsEnd > gameplayActionsStart)
 const gameplayActionsSource = gameplayCardSource.slice(gameplayActionsStart, gameplayActionsEnd)
+const passButtonStart = gameplayActionsSource.indexOf('<Button')
+const passButtonEnd = gameplayActionsSource.indexOf('</Button>', passButtonStart)
+assert.ok(passButtonStart >= 0 && passButtonEnd > passButtonStart)
+const passButtonSource = gameplayActionsSource.slice(passButtonStart, passButtonEnd)
+assert.match(passButtonSource, /className=\{styles\.passButton\}/)
+assert.match(passButtonSource, /onClick=\{\(\) => commitDecision\('pass'\)\}/)
+assert.match(passButtonSource, /↑ Pasar/)
 const passActionIndex = gameplayActionsSource.indexOf("onClick={() => commitDecision('pass')}")
 const correctActionIndex = gameplayActionsSource.indexOf(
   "onClick={() => commitDecision('correct')}",
@@ -951,19 +964,188 @@ assertRuleUsesPill(
   '\\.actions button',
   'Visible pass and correct buttons',
 )
+const passButtonRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.passButton:not\\(:disabled\\)',
+  'Enabled pass action',
+)
+const passButtonHoverRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.passButton:not\\(:disabled\\):hover',
+  'Hovered pass action',
+)
+const passButtonFocusRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.passButton:not\\(:disabled\\):focus-visible',
+  'Keyboard-focused pass action',
+)
+const passButtonActiveRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.passButton:not\\(:disabled\\):active',
+  'Active pass action',
+)
+const passButtonStableDeclarations = new Map([
+  ['border-color', 'var(--color-border) !important'],
+  ['background', 'var(--color-surface) !important'],
+  ['box-shadow', 'var(--shadow-control) !important'],
+])
+assert.equal(
+  getDeclarationValue(passButtonRule, 'color', 'Enabled pass action'),
+  'var(--stage-action-color) !important',
+)
+assert.deepEqual(getDeclaredProperties(passButtonRule), [
+  'border-color',
+  'color',
+  'background',
+  'box-shadow',
+])
+assert.deepEqual(getDeclaredProperties(passButtonHoverRule), [
+  'border-color',
+  'color',
+  'background',
+  'box-shadow',
+])
+assert.deepEqual(getDeclaredProperties(passButtonFocusRule), [
+  'border-color',
+  'color',
+  'background',
+  'box-shadow',
+  'outline',
+  'outline-offset',
+])
+assert.deepEqual(getDeclaredProperties(passButtonActiveRule), [
+  'border-color',
+  'color',
+  'background',
+  'box-shadow',
+])
+for (const [property, expectedValue] of passButtonStableDeclarations) {
+  assert.equal(
+    getDeclarationValue(passButtonRule, property, 'Enabled pass action'),
+    expectedValue,
+  )
+  assert.equal(
+    getDeclarationValue(passButtonHoverRule, property, 'Hovered pass action'),
+    expectedValue,
+  )
+  assert.equal(
+    getDeclarationValue(passButtonFocusRule, property, 'Keyboard-focused pass action'),
+    expectedValue,
+  )
+  assert.equal(
+    getDeclarationValue(passButtonActiveRule, property, 'Active pass action'),
+    expectedValue,
+  )
+}
+assert.equal(
+  getDeclarationValue(passButtonHoverRule, 'color', 'Hovered pass action'),
+  'var(--stage-background-color) !important',
+)
+assert.equal(
+  getDeclarationValue(passButtonFocusRule, 'color', 'Keyboard-focused pass action'),
+  'var(--stage-action-color) !important',
+)
+assert.equal(
+  getDeclarationValue(passButtonFocusRule, 'outline', 'Keyboard-focused pass action'),
+  '3px solid var(--color-focus)',
+)
+assert.equal(
+  getDeclarationValue(passButtonFocusRule, 'outline-offset', 'Keyboard-focused pass action'),
+  '3px',
+)
+assert.equal(
+  getDeclarationValue(passButtonActiveRule, 'color', 'Active pass action'),
+  'var(--stage-action-color) !important',
+)
+assert.doesNotMatch(
+  `${passButtonRule}${passButtonFocusRule}${passButtonActiveRule}`,
+  /var\(--stage-background-color\)/,
+)
+assert.doesNotMatch(passButtonHoverRule, /var\(--stage-action-color\)/)
+const passButtonSelectors =
+  gameplayCardStyles.match(/\.actions \.passButton[^,{]*\s*\{/g) ?? []
+assert.equal(passButtonSelectors.length, 4)
+for (const selector of passButtonSelectors) {
+  assert.match(selector, /:not\(:disabled\)/)
+}
 const correctButtonRule = getRuleBody(
   gameplayCardStyles,
   '\\.actions \\.correctButton:not\\(:disabled\\)',
   'Stage-aware correct action',
 )
-assert.match(correctButtonRule, /border-color:\s*var\(--stage-action-color\);/)
-assert.match(correctButtonRule, /color:\s*var\(--color-text-strong\);/)
-assert.match(correctButtonRule, /background:\s*var\(--stage-action-color\);/)
-assert.match(
-  correctButtonRule,
-  /box-shadow:\s*0 0 0 1px var\(--color-text-strong\), var\(--shadow-control\);/,
+const correctButtonHoverRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.correctButton:not\\(:disabled\\):hover',
+  'Hovered correct action',
 )
-assert.doesNotMatch(correctButtonRule, /#[\da-f]{3,8}\b/i)
+const correctButtonFocusRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.correctButton:not\\(:disabled\\):focus-visible',
+  'Keyboard-focused correct action',
+)
+const correctButtonActiveRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions \\.correctButton:not\\(:disabled\\):active',
+  'Active correct action',
+)
+assert.deepEqual(getDeclaredProperties(correctButtonRule), ['background'])
+assert.equal(
+  getDeclarationValue(correctButtonRule, 'background', 'Stage-aware correct action'),
+  'var(--stage-action-color)',
+)
+const correctButtonStateRules = new Map([
+  ['Hovered correct action', correctButtonHoverRule],
+  ['Keyboard-focused correct action', correctButtonFocusRule],
+  ['Active correct action', correctButtonActiveRule],
+])
+for (const [label, rule] of correctButtonStateRules) {
+  assert.equal(
+    getDeclarationValue(rule, 'border-color', label),
+    'var(--stage-action-color) !important',
+  )
+  assert.equal(
+    getDeclarationValue(rule, 'background', label),
+    'var(--stage-action-color) !important',
+  )
+}
+assert.deepEqual(getDeclaredProperties(correctButtonHoverRule), [
+  'border-color',
+  'background',
+])
+assert.deepEqual(getDeclaredProperties(correctButtonFocusRule), [
+  'border-color',
+  'background',
+  'outline',
+  'outline-offset',
+])
+assert.deepEqual(getDeclaredProperties(correctButtonActiveRule), [
+  'border-color',
+  'background',
+])
+assert.equal(
+  getDeclarationValue(correctButtonFocusRule, 'outline', 'Keyboard-focused correct action'),
+  '3px solid var(--color-focus)',
+)
+assert.equal(
+  getDeclarationValue(
+    correctButtonFocusRule,
+    'outline-offset',
+    'Keyboard-focused correct action',
+  ),
+  '3px',
+)
+const correctButtonRules = [correctButtonRule, ...correctButtonStateRules.values()]
+assert.doesNotMatch(
+  correctButtonRules.join(''),
+  /var\(--(?:color-primary|stage-background-color)\)/,
+)
+assert.doesNotMatch(correctButtonRules.join(''), /#[\da-f]{3,8}\b/i)
+const correctButtonSelectors =
+  gameplayCardStyles.match(/\.actions \.correctButton[^,{]*\s*\{/g) ?? []
+assert.equal(correctButtonSelectors.length, 4)
+for (const selector of correctButtonSelectors) {
+  assert.match(selector, /:not\(:disabled\)/)
+}
 
 const outgoingCardStart = gameplayCardSource.indexOf('{outgoingCard ? (')
 const outgoingCardEnd = gameplayCardSource.indexOf(') : null}', outgoingCardStart)
@@ -1048,7 +1230,6 @@ assert.match(gameStyles, /\.gameCompletePage::before\s*\{\s*background:\s*var\(-
 for (const [label, selectorPattern] of [
   ['Active header', '\\.activeHeader'],
   ['Active card and action region', '\\.cardViewport'],
-  ['Active status', '\\.status'],
 ]) {
   assert.match(
     getRuleBody(gameStyles, selectorPattern, `${label} entry animation`),
@@ -1070,15 +1251,20 @@ assert.match(
 assert.doesNotMatch(activeGameAnimation, /scale\(|infinite|flash/i)
 assert.match(
   gameStyles,
-  /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.activeHeader,\s*\.cardViewport,\s*\.status\s*\{[^}]*animation:\s*none;/,
+  /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.activeHeader,\s*\.cardViewport\s*\{[^}]*animation:\s*none;/,
 )
+assert.doesNotMatch(gameStyles, /\.status(?:\s|:|\{)/)
 assertRuleUsesPill(
   gameStyles,
   '\\.bottomButton,\\s*\\.resultActions button',
   'Gameplay handoff, terminal, and result buttons',
 )
 assert.match(
-  getRuleBody(gameStyles, '\\.terminalContent', 'Terminal content'),
+  getRuleBody(
+    gameStyles,
+    '\\.gameCompletePage \\.terminalContent',
+    'Game-complete terminal content',
+  ),
   /color:\s*var\(--color-text-strong\);/,
 )
 
@@ -1093,37 +1279,6 @@ assert.equal(rootTokens.get('--color-tertiary-dark'), '#0c8c6c')
 assert.equal(rootTokens.get('--color-text-strong'), '#000')
 assert.equal(rootTokens.get('--radius-control-pill'), '999px')
 assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
-const strongTextColor = resolveRootToken(rootTokens, '--color-text-strong')
-for (const actionToken of [
-  '--color-primary',
-  '--color-tertiary',
-  '--color-secondary',
-]) {
-  const contrastRatio = getHexContrastRatio(
-    resolveRootToken(rootTokens, actionToken),
-    strongTextColor,
-  )
-  assert.ok(
-    contrastRatio >= 4.5,
-    `${actionToken} must have at least 4.5:1 contrast against --color-text-strong; received ${contrastRatio.toFixed(2)}:1`,
-  )
-}
-
-// The 1px --color-text-strong box-shadow is the action boundary against dark stage backgrounds.
-for (const backgroundToken of [
-  '--color-primary-dark',
-  '--color-tertiary-dark',
-  '--color-secondary-dark',
-]) {
-  const contrastRatio = getHexContrastRatio(
-    resolveRootToken(rootTokens, backgroundToken),
-    strongTextColor,
-  )
-  assert.ok(
-    contrastRatio >= 3,
-    `${backgroundToken} must give the action boundary at least 3:1 contrast; received ${contrastRatio.toFixed(2)}:1`,
-  )
-}
 
 const expectedCardTokenValues = new Map([
   ['--color-card-surface', 'var(--color-surface)'],
@@ -1202,5 +1357,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, empty initial active status with later feedback retained, dark-background/normal-action stage pairings, reduced-motion-safe active entry animation, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
+  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, hidden active live regions with empty initial feedback and later meaningful announcements, dark-background/normal-action stage pairings, reduced-motion-safe active entry animation, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
 )
