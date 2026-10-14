@@ -6,15 +6,23 @@ import type {
 
 interface GameplayRoutePrivacyState {
   game: GameplayState | null
-  concealForPrivacy: () => GameplayTransitionResult
+  concealForPrivacy: (now?: number) => GameplayTransitionResult
 }
 
 interface GameplayRoutePrivacyStore {
   getState: () => GameplayRoutePrivacyState
 }
 
-export function concealActiveGameplayForRoute(store: GameplayRoutePrivacyStore) {
+export function concealActiveGameplayForRoute(
+  store: GameplayRoutePrivacyStore,
+  now = Date.now(),
+) {
   const { game, concealForPrivacy } = store.getState()
-  if (game?.phase !== GAMEPLAY_PHASES.activeTurn) return null
-  return concealForPrivacy()
+  if (
+    game?.phase !== GAMEPLAY_PHASES.activeTurn &&
+    game?.phase !== GAMEPLAY_PHASES.lightningAttribution
+  ) {
+    return null
+  }
+  return concealForPrivacy(now)
 }

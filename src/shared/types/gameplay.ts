@@ -5,6 +5,7 @@ import type { Player, TeamAssignment, TeamId } from './setup.ts'
 export const GAMEPLAY_PHASES = {
   handoff: 'handoff',
   activeTurn: 'active-turn',
+  lightningAttribution: 'lightning-attribution',
   concealedActive: 'concealed-active',
   timeExpired: 'time-expired',
   stageComplete: 'stage-complete',
@@ -35,16 +36,6 @@ export const GAMEPLAY_STAGES = [
   },
   {
     index: 2,
-    kind: 'sounds',
-    label: 'RONDA 3',
-    name: 'Ronda 3',
-    rule: 'Sonidos',
-    source: 'main',
-    backgroundColor: 'var(--color-secondary-dark)',
-    actionColor: 'var(--color-secondary)',
-  },
-  {
-    index: 3,
     kind: 'lightning',
     label: 'RELÁMPAGO',
     name: 'Relámpago',
@@ -52,6 +43,16 @@ export const GAMEPLAY_STAGES = [
     source: 'lightning',
     backgroundColor: 'var(--color-primary-dark)',
     actionColor: 'var(--color-primary)',
+  },
+  {
+    index: 3,
+    kind: 'sounds',
+    label: 'RONDA 3',
+    name: 'Ronda 3',
+    rule: 'Sonidos',
+    source: 'main',
+    backgroundColor: 'var(--color-secondary-dark)',
+    actionColor: 'var(--color-secondary)',
   },
 ] as const
 
@@ -85,6 +86,12 @@ export interface GameplayTeamScore {
 export interface GameplayTurnStats {
   correct: number
   passed: number
+}
+
+export interface PendingLightningAttribution {
+  readonly cardId: CardId
+  readonly decidedAt: number
+  readonly pausedAt: number
 }
 
 export interface GameplayTurnResult {
@@ -134,6 +141,12 @@ export type GameplayState =
       phase: 'active-turn'
       startedAt: number
       deadline: number
+    })
+  | (GameplayStateCore & {
+      phase: 'lightning-attribution'
+      startedAt: number
+      deadline: number
+      pendingAttribution: PendingLightningAttribution
     })
   | (GameplayStateCore & {
       phase: 'concealed-active'
@@ -197,11 +210,14 @@ export type GameplayCreationResult =
 export type GameplayTransitionRejectReason =
   | 'missing-game'
   | 'invalid-phase'
-  | 'invalid-time'
+  | 'invalid-timestamp'
   | 'deadline-not-reached'
   | 'stale-card'
   | 'empty-deck'
   | 'invalid-participant'
+  | 'invalid-player-membership'
+  | 'invalid-stage'
+  | 'attribution-required'
   | 'final-stage'
 
 export type GameplayTransitionResult =

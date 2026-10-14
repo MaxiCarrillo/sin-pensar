@@ -3,9 +3,16 @@ import { readFile } from 'node:fs/promises'
 
 import { concealActiveGameplayForRoute } from '../src/modules/game/game-route-privacy.ts'
 import { getKeyboardDecision, getSwipeDecision } from '../src/modules/game/swipe.ts'
+import {
+  getGameplayTimerPresentation,
+  rebaseGameplayTimerClock,
+} from '../src/modules/game/use-gameplay-timer.ts'
 import { CARD_IDS } from '../src/shared/catalog/card-catalog.ts'
 import { createCardDraftSetupKey } from '../src/shared/domain/card-draft.ts'
 import {
+  awardLightningCardAttribution,
+  beginLightningCardAttribution,
+  cancelLightningCardAttribution,
   concealActiveGameplayTurn,
   createGameplaySetupKey,
   createGameplayState,
@@ -13,6 +20,7 @@ import {
   getCompatibleGameplayState,
   getCurrentGameplayCardId,
   getCurrentTurnParticipant,
+  getGameplayTurnDurationSeconds,
   getWinningTeams,
   markGameplayCardCorrect,
   passGameplayCard,
@@ -168,6 +176,28 @@ function createGame(teamSizes, seed = 1) {
   return { input, state: result.state }
 }
 
+function placeGameAtStage(state, stageIndex) {
+  const stage = GAMEPLAY_STAGES[stageIndex]
+  assert.ok(stage)
+  const sourceCardIds = stage.source === 'main'
+    ? state.mainDeckCardIds
+    : state.lightningDeckCardIds
+  return {
+    ...state,
+    phase: GAMEPLAY_PHASES.handoff,
+    stageIndex: stage.index,
+    stageKind: stage.kind,
+    pendingCardIds: [...sourceCardIds],
+    startedAt: null,
+    deadline: null,
+  }
+}
+
+function createActiveStage(teamSizes, stageIndex, startedAt, seed = 1) {
+  const game = createGame(teamSizes, seed).state
+  return expectTransition(startGameplayTurn(placeGameAtStage(game, stageIndex), startedAt))
+}
+
 function getTurnIdentity(state) {
   const participant = getCurrentTurnParticipant(state)
   assert.ok(participant)
@@ -222,6 +252,53 @@ verifyRotation([2, 2, 2, 2], [
   'team-1:player-1',
 ])
 
+assert.deepEqual(
+  GAMEPLAY_STAGES.map(({ index, kind, label, name, rule, source }) => ({
+    index,
+    kind,
+    label,
+    name,
+    rule,
+    source,
+  })),
+  [
+    {
+      index: 0,
+      kind: 'talk',
+      label: 'RONDA 1',
+      name: 'Ronda 1',
+      rule: 'Hablar',
+      source: 'main',
+    },
+    {
+      index: 1,
+      kind: 'mime',
+      label: 'RONDA 2',
+      name: 'Ronda 2',
+      rule: 'Mímica',
+      source: 'main',
+    },
+    {
+      index: 2,
+      kind: 'lightning',
+      label: 'RELÁMPAGO',
+      name: 'Relámpago',
+      rule: 'Todo permitido',
+      source: 'lightning',
+    },
+    {
+      index: 3,
+      kind: 'sounds',
+      label: 'RONDA 3',
+      name: 'Ronda 3',
+      rule: 'Sonidos',
+      source: 'main',
+    },
+  ],
+)
+assert.deepEqual(GAMEPLAY_STAGES.map((stage) => stage.index), [0, 1, 2, 3])
+assert.equal(GAMEPLAY_STAGES.at(-1)?.kind, 'sounds')
+
 const exactDeckGame = createGame([2, 2], 22)
 const expectedMainDeck = exactDeckGame.input.cardDraft.playerDrafts.flatMap(
   (draft) => draft.selectedMainCardIds,
@@ -237,6 +314,13 @@ assert.deepEqual(
   [...exactDeckGame.state.pendingCardIds].sort(),
   [...expectedMainDeck].sort(),
 )
+
+for (const invalidTimestamp of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+  expectTransitionRejected(
+    startGameplayTurn(exactDeckGame.state, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
 
 const sequenceGame = createGame([2, 2], 8).state
 expectTransitionRejected(
@@ -255,6 +339,81 @@ assert.equal(sequenceState.scores[0].score, 1)
 assert.equal(sequenceState.turnStats.correct, 1)
 assert.ok(!sequenceState.pendingCardIds.includes(correctCardId))
 expectTransitionRejected(markGameplayCardCorrect(sequenceState, correctCardId, 1_003), 'stale-card')
+
+const timestampActive = createActiveStage([2, 2], 0, 50_000, 81)
+const timestampCardId = getCurrentGameplayCardId(timestampActive)
+assert.ok(timestampCardId)
+for (const invalidTimestamp of [
+  timestampActive.startedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    markGameplayCardCorrect(timestampActive, timestampCardId, invalidTimestamp),
+    'invalid-timestamp',
+  )
+  expectTransitionRejected(
+    passGameplayCard(timestampActive, timestampCardId, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+const correctAtStart = expectTransition(
+  markGameplayCardCorrect(timestampActive, timestampCardId, timestampActive.startedAt),
+)
+assert.equal(correctAtStart.turnStats.correct, 1)
+const passAtStart = expectTransition(
+  passGameplayCard(timestampActive, timestampCardId, timestampActive.startedAt),
+)
+assert.equal(passAtStart.turnStats.passed, 1)
+const passAtDeadline = expectTransition(
+  passGameplayCard(timestampActive, timestampCardId, timestampActive.deadline),
+)
+assert.equal(passAtDeadline.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(passAtDeadline.turnStats.passed, 1)
+const passAfterDeadline = expectTransition(
+  passGameplayCard(timestampActive, timestampCardId, timestampActive.deadline + 1),
+)
+assert.equal(passAfterDeadline.phase, GAMEPLAY_PHASES.timeExpired)
+for (const invalidTimestamp of [
+  timestampActive.startedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    concealActiveGameplayTurn(timestampActive, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+const concealedAtStart = expectTransition(
+  concealActiveGameplayTurn(timestampActive, timestampActive.startedAt),
+)
+expectTransitionRejected(
+  startGameplayTurn(concealedAtStart, timestampActive.startedAt - 1),
+  'invalid-timestamp',
+)
+for (const invalidTimestamp of [
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    startGameplayTurn(concealedAtStart, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+assert.equal(
+  expectTransition(startGameplayTurn(concealedAtStart, timestampActive.startedAt)).phase,
+  GAMEPLAY_PHASES.activeTurn,
+)
+const concealedAtDeadline = expectTransition(
+  concealActiveGameplayTurn(timestampActive, timestampActive.deadline),
+)
+assert.equal(
+  expectTransition(startGameplayTurn(concealedAtDeadline, timestampActive.deadline)).phase,
+  GAMEPLAY_PHASES.activeTurn,
+)
 
 const synchronousStoreBase = createGame([2, 2], 9).state
 const synchronousStoreActive = expectTransition(startGameplayTurn(synchronousStoreBase, 3_000))
@@ -282,7 +441,7 @@ const beforeConcealment = {
   turnStats: { ...sequenceState.turnStats },
   turnIdentity: getTurnIdentity(sequenceState),
 }
-const concealedTurn = expectTransition(concealActiveGameplayTurn(sequenceState))
+const concealedTurn = expectTransition(concealActiveGameplayTurn(sequenceState, 1_500))
 assert.equal(concealedTurn.phase, GAMEPLAY_PHASES.concealedActive)
 assert.equal(concealedTurn.startedAt, beforeConcealment.startedAt)
 assert.equal(concealedTurn.deadline, beforeConcealment.deadline)
@@ -316,6 +475,18 @@ assert.equal(routeResumedTurn.deadline, routeRemountActive.deadline)
 
 const timeoutGame = createGame([2, 2], 17).state
 const timeoutActive = expectTransition(startGameplayTurn(timeoutGame, 5_000))
+for (const invalidTimestamp of [
+  timeoutActive.startedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(expireGameplayTurn(timeoutActive, invalidTimestamp), 'invalid-timestamp')
+}
+expectTransitionRejected(
+  expireGameplayTurn(timeoutActive, timeoutActive.startedAt),
+  'deadline-not-reached',
+)
 expectTransitionRejected(expireGameplayTurn(timeoutActive, timeoutActive.deadline - 1), 'deadline-not-reached')
 expectTransitionRejected(expireGameplayTurn(timeoutActive, timeoutActive.deadline), 'deadline-not-reached')
 const queueBeforeTimeout = [...timeoutActive.pendingCardIds]
@@ -327,10 +498,13 @@ const duplicateTimeout = expireGameplayTurn(timeoutState, timeoutActive.deadline
 assert.equal(duplicateTimeout.kind, 'success')
 assert.strictEqual(duplicateTimeout.state, timeoutState)
 assert.equal(duplicateTimeout.state.completedTurns.length, 1)
+expectTransitionRejected(expireGameplayTurn(timeoutState, Number.NaN), 'invalid-timestamp')
 
 const concealedExpiryBase = createGame([2, 2], 18).state
 const activeBeforeRemount = expectTransition(startGameplayTurn(concealedExpiryBase, 8_000))
-const concealedPastDeadline = expectTransition(concealActiveGameplayTurn(activeBeforeRemount))
+const concealedPastDeadline = expectTransition(
+  concealActiveGameplayTurn(activeBeforeRemount, 8_500),
+)
 const resumedAfterDeadline = expectTransition(
   startGameplayTurn(concealedPastDeadline, activeBeforeRemount.deadline + 1),
 )
@@ -405,6 +579,413 @@ expectTransitionRejected(
 )
 assert.equal(timerFirstOutcome.completedTurns.length, 1)
 
+const lightningRaceActive = createActiveStage([2, 2], 2, 20_000, 30)
+const lightningRaceCardId = getCurrentGameplayCardId(lightningRaceActive)
+assert.ok(lightningRaceCardId)
+assert.equal(lightningRaceActive.deadline, 30_000)
+assert.equal(
+  getGameplayTurnDurationSeconds(GAMEPLAY_STAGES[2], lightningRaceActive.turnDuration),
+  10,
+)
+for (const invalidTimestamp of [
+  lightningRaceActive.startedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    beginLightningCardAttribution(lightningRaceActive, lightningRaceCardId, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+const attributionAtStart = expectTransition(
+  beginLightningCardAttribution(
+    lightningRaceActive,
+    lightningRaceCardId,
+    lightningRaceActive.startedAt,
+  ),
+)
+assert.equal(attributionAtStart.phase, GAMEPLAY_PHASES.lightningAttribution)
+assert.equal(attributionAtStart.pendingAttribution.decidedAt, lightningRaceActive.startedAt)
+expectTransitionRejected(
+  markGameplayCardCorrect(lightningRaceActive, lightningRaceCardId, 20_001),
+  'attribution-required',
+)
+const lightningPass = expectTransition(
+  passGameplayCard(lightningRaceActive, lightningRaceCardId, 20_001),
+)
+assert.equal(lightningPass.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(lightningPass.turnStats.passed, 1)
+assert.equal(lightningPass.pendingCardIds.at(-1), lightningRaceCardId)
+assert.equal('pendingAttribution' in lightningPass, false)
+const exactDeadlineAttribution = expectTransition(
+  beginLightningCardAttribution(
+    lightningRaceActive,
+    lightningRaceCardId,
+    lightningRaceActive.deadline,
+  ),
+)
+assert.equal(exactDeadlineAttribution.phase, GAMEPLAY_PHASES.lightningAttribution)
+assert.deepEqual(exactDeadlineAttribution.pendingAttribution, {
+  cardId: lightningRaceCardId,
+  decidedAt: lightningRaceActive.deadline,
+  pausedAt: lightningRaceActive.deadline,
+})
+expectTransitionRejected(
+  expireGameplayTurn(exactDeadlineAttribution, lightningRaceActive.deadline + 10_000),
+  'invalid-phase',
+)
+const exactDeadlineAward = expectTransition(
+  awardLightningCardAttribution(
+    exactDeadlineAttribution,
+    lightningRaceCardId,
+    'player-1',
+    lightningRaceActive.deadline + 10_000,
+  ),
+)
+assert.equal(exactDeadlineAward.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(exactDeadlineAward.deadline, lightningRaceActive.deadline + 10_000)
+assert.equal(exactDeadlineAward.scores[0].score, 1)
+const lateLightningAttribution = expectTransition(
+  beginLightningCardAttribution(
+    lightningRaceActive,
+    lightningRaceCardId,
+    lightningRaceActive.deadline + 1,
+  ),
+)
+assert.equal(lateLightningAttribution.phase, GAMEPLAY_PHASES.timeExpired)
+assert.deepEqual(lateLightningAttribution.pendingCardIds, lightningRaceActive.pendingCardIds)
+const lightningTimeoutFirst = expectTransition(
+  expireGameplayTurn(lightningRaceActive, lightningRaceActive.deadline + 1),
+)
+expectTransitionRejected(
+  beginLightningCardAttribution(
+    lightningTimeoutFirst,
+    lightningRaceCardId,
+    lightningRaceActive.deadline,
+  ),
+  'invalid-phase',
+)
+
+const normalStageForAttribution = createActiveStage([2, 2], 1, 40_000, 31)
+const normalStageCardId = getCurrentGameplayCardId(normalStageForAttribution)
+assert.ok(normalStageCardId)
+expectTransitionRejected(
+  beginLightningCardAttribution(normalStageForAttribution, normalStageCardId, 40_001),
+  'invalid-stage',
+)
+expectTransitionRejected(
+  beginLightningCardAttribution(
+    placeGameAtStage(createGame([2, 2], 32).state, 2),
+    lightningRaceCardId,
+    40_001,
+  ),
+  'invalid-phase',
+)
+expectTransitionRejected(
+  beginLightningCardAttribution(
+    lightningRaceActive,
+    lightningRaceActive.pendingCardIds[1],
+    20_001,
+  ),
+  'stale-card',
+)
+
+const cancelActive = createActiveStage([2, 2], 2, 100_000, 33)
+const cancelCardId = getCurrentGameplayCardId(cancelActive)
+assert.ok(cancelCardId)
+const cancelPending = expectTransition(
+  beginLightningCardAttribution(cancelActive, cancelCardId, 104_000),
+)
+const cancelSnapshot = {
+  pendingCardIds: [...cancelPending.pendingCardIds],
+  scores: cancelPending.scores.map((score) => ({ ...score })),
+  turnStats: { ...cancelPending.turnStats },
+}
+for (const invalidTimestamp of [
+  cancelPending.pendingAttribution.pausedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    cancelLightningCardAttribution(cancelPending, cancelCardId, invalidTimestamp),
+    'invalid-timestamp',
+  )
+  expectTransitionRejected(
+    concealActiveGameplayTurn(cancelPending, invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+const cancelAtPauseStart = expectTransition(
+  cancelLightningCardAttribution(
+    cancelPending,
+    cancelCardId,
+    cancelPending.pendingAttribution.pausedAt,
+  ),
+)
+assert.equal(cancelAtPauseStart.startedAt, cancelActive.startedAt)
+assert.equal(cancelAtPauseStart.deadline, cancelActive.deadline)
+expectTransitionRejected(
+  cancelLightningCardAttribution(
+    cancelPending,
+    cancelPending.pendingCardIds[1],
+    105_000,
+  ),
+  'stale-card',
+)
+const cancelResolvedAt = 109_500
+const cancelledAttribution = expectTransition(
+  cancelLightningCardAttribution(cancelPending, cancelCardId, cancelResolvedAt),
+)
+assert.equal(cancelledAttribution.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(cancelledAttribution.startedAt, cancelActive.startedAt + 5_500)
+assert.equal(cancelledAttribution.deadline, cancelActive.deadline + 5_500)
+assert.equal(
+  cancelledAttribution.deadline - cancelResolvedAt,
+  cancelActive.deadline - cancelPending.pendingAttribution.decidedAt,
+)
+assert.deepEqual(cancelledAttribution.pendingCardIds, cancelSnapshot.pendingCardIds)
+assert.deepEqual(cancelledAttribution.scores, cancelSnapshot.scores)
+assert.deepEqual(cancelledAttribution.turnStats, cancelSnapshot.turnStats)
+assert.equal('pendingAttribution' in cancelledAttribution, false)
+expectTransitionRejected(
+  cancelLightningCardAttribution(cancelledAttribution, cancelCardId, cancelResolvedAt + 1),
+  'invalid-phase',
+)
+
+const awardActive = createActiveStage([2, 2], 2, 200_000, 34)
+const awardCardId = getCurrentGameplayCardId(awardActive)
+assert.ok(awardCardId)
+const awardPending = expectTransition(
+  beginLightningCardAttribution(awardActive, awardCardId, 204_000),
+)
+for (const invalidTimestamp of [
+  awardPending.pendingAttribution.pausedAt - 1,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+]) {
+  expectTransitionRejected(
+    awardLightningCardAttribution(awardPending, awardCardId, 'player-3', invalidTimestamp),
+    'invalid-timestamp',
+  )
+}
+const awardAtPauseStart = expectTransition(
+  awardLightningCardAttribution(
+    awardPending,
+    awardCardId,
+    'player-3',
+    awardPending.pendingAttribution.pausedAt,
+  ),
+)
+assert.equal(awardAtPauseStart.startedAt, awardActive.startedAt)
+assert.equal(awardAtPauseStart.deadline, awardActive.deadline)
+expectTransitionRejected(
+  awardLightningCardAttribution(
+    awardPending,
+    awardPending.pendingCardIds[1],
+    'player-3',
+    205_000,
+  ),
+  'stale-card',
+)
+expectTransitionRejected(
+  awardLightningCardAttribution(awardPending, awardCardId, 'unknown-player', 205_000),
+  'invalid-player-membership',
+)
+const duplicateMembershipState = {
+  ...awardPending,
+  teams: awardPending.teams.map((team, index) =>
+    index === 1 ? { ...team, playerIds: [...team.playerIds, 'player-1'] } : team,
+  ),
+}
+expectTransitionRejected(
+  awardLightningCardAttribution(duplicateMembershipState, awardCardId, 'player-1', 205_000),
+  'invalid-player-membership',
+)
+const awardedAttribution = expectTransition(
+  awardLightningCardAttribution(awardPending, awardCardId, 'player-3', 209_000),
+)
+assert.equal(awardedAttribution.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(awardedAttribution.startedAt, awardActive.startedAt + 5_000)
+assert.equal(awardedAttribution.deadline, awardActive.deadline + 5_000)
+assert.equal(awardedAttribution.deadline - 209_000, 6_000)
+assert.equal(awardedAttribution.scores[0].score, 0)
+assert.equal(awardedAttribution.scores[1].score, 1)
+assert.equal(awardedAttribution.turnStats.correct, 1)
+assert.ok(!awardedAttribution.pendingCardIds.includes(awardCardId))
+const runningTimerClock = {
+  now: awardPending.pendingAttribution.decidedAt - 100,
+  startedAt: awardPending.startedAt,
+  deadline: awardPending.deadline,
+  frozenAt: null,
+}
+const frozenTimerClock = rebaseGameplayTimerClock(runningTimerClock, {
+  startedAt: awardPending.startedAt,
+  deadline: awardPending.deadline,
+  frozenAt: awardPending.pendingAttribution.decidedAt,
+})
+assert.equal(frozenTimerClock.now, awardPending.pendingAttribution.decidedAt)
+const resumedTimerClock = rebaseGameplayTimerClock(frozenTimerClock, {
+  startedAt: awardedAttribution.startedAt,
+  deadline: awardedAttribution.deadline,
+  frozenAt: null,
+})
+assert.equal(resumedTimerClock.now, 209_000)
+assert.deepEqual(
+  getGameplayTimerPresentation(
+    resumedTimerClock.startedAt,
+    resumedTimerClock.deadline,
+    resumedTimerClock.now,
+  ),
+  { progress: 0.4, remainingSeconds: 6 },
+)
+assert.strictEqual(
+  rebaseGameplayTimerClock(resumedTimerClock, {
+    startedAt: resumedTimerClock.startedAt,
+    deadline: resumedTimerClock.deadline,
+    frozenAt: resumedTimerClock.frozenAt,
+  }),
+  resumedTimerClock,
+)
+assert.equal(
+  rebaseGameplayTimerClock(
+    { now: 50_500, startedAt: 50_000, deadline: 80_000, frozenAt: null },
+    { startedAt: 51_000, deadline: 81_000, frozenAt: null },
+  ).now,
+  51_500,
+)
+assert.equal(
+  rebaseGameplayTimerClock(
+    { now: 50_500, startedAt: 50_000, deadline: 80_000, frozenAt: null },
+    { startedAt: 90_000, deadline: 100_000, frozenAt: null },
+  ).now,
+  90_000,
+)
+expectTransitionRejected(
+  awardLightningCardAttribution(awardedAttribution, awardCardId, 'player-3', 209_001),
+  'invalid-phase',
+)
+expectTransitionRejected(
+  cancelLightningCardAttribution(awardedAttribution, awardCardId, 209_001),
+  'invalid-phase',
+)
+
+const membershipSetup = createSetup([2, 2])
+for (const player of membershipSetup.players) {
+  const playerAwardActive = createActiveStage([2, 2], 2, 300_000, 35)
+  const playerAwardCardId = getCurrentGameplayCardId(playerAwardActive)
+  assert.ok(playerAwardCardId)
+  const playerAwardPending = expectTransition(
+    beginLightningCardAttribution(playerAwardActive, playerAwardCardId, 301_000),
+  )
+  const playerAwarded = expectTransition(
+    awardLightningCardAttribution(playerAwardPending, playerAwardCardId, player.id, 302_000),
+  )
+  const expectedTeam = playerAwardActive.teams.find((team) =>
+    team.playerIds.includes(player.id),
+  )
+  assert.ok(expectedTeam)
+  assert.equal(
+    playerAwarded.scores.reduce((total, score) => total + score.score, 0),
+    1,
+  )
+  for (const score of playerAwarded.scores) {
+    assert.equal(score.score, score.teamId === expectedTeam.id ? 1 : 0)
+  }
+}
+
+const finalLightningActiveBase = createActiveStage([2, 2], 2, 400_000, 36)
+const finalLightningCardId = getCurrentGameplayCardId(finalLightningActiveBase)
+assert.ok(finalLightningCardId)
+const finalLightningActive = {
+  ...finalLightningActiveBase,
+  pendingCardIds: [finalLightningCardId],
+}
+const finalLightningPresenter = getCurrentTurnParticipant(finalLightningActive)
+assert.ok(finalLightningPresenter)
+const finalLightningPending = expectTransition(
+  beginLightningCardAttribution(finalLightningActive, finalLightningCardId, 401_000),
+)
+const completedLightningStage = expectTransition(
+  awardLightningCardAttribution(
+    finalLightningPending,
+    finalLightningCardId,
+    'player-3',
+    402_000,
+  ),
+)
+assert.equal(completedLightningStage.phase, GAMEPLAY_PHASES.stageComplete)
+assert.equal(completedLightningStage.completedTurns.at(-1)?.teamId, finalLightningPresenter.team.id)
+assert.equal(
+  completedLightningStage.completedTurns.at(-1)?.playerId,
+  finalLightningPresenter.playerId,
+)
+assert.equal(completedLightningStage.completedStages.at(-1)?.completedByTeamId, 'team-2')
+assert.equal(completedLightningStage.completedStages.at(-1)?.completedByPlayerId, 'player-3')
+const rondaThreeHandoff = expectTransition(
+  prepareNextGameplayStage(completedLightningStage, () => 0.5),
+)
+assert.equal(rondaThreeHandoff.stageIndex, 3)
+assert.equal(rondaThreeHandoff.stageKind, 'sounds')
+assert.deepEqual(
+  [...rondaThreeHandoff.pendingCardIds].sort(),
+  [...rondaThreeHandoff.mainDeckCardIds].sort(),
+)
+const rondaThreeStartedAt = 500_000
+const rondaThreeActive = expectTransition(
+  startGameplayTurn(rondaThreeHandoff, rondaThreeStartedAt),
+)
+assert.equal(
+  rondaThreeActive.deadline,
+  rondaThreeStartedAt + rondaThreeActive.turnDuration * 1_000,
+)
+
+const routeLightningActive = createActiveStage([2, 2], 2, 600_000, 37)
+const routeLightningCardId = getCurrentGameplayCardId(routeLightningActive)
+assert.ok(routeLightningCardId)
+const routeLightningPending = expectTransition(
+  beginLightningCardAttribution(routeLightningActive, routeLightningCardId, 604_000),
+)
+useGameplayStore.setState({ game: routeLightningPending })
+const routeLightningConcealResult = concealActiveGameplayForRoute(
+  useGameplayStore,
+  609_000,
+)
+assert.ok(routeLightningConcealResult)
+const routeLightningConcealed = expectTransition(routeLightningConcealResult)
+assert.equal(routeLightningConcealed.phase, GAMEPLAY_PHASES.concealedActive)
+assert.equal(routeLightningConcealed.startedAt, routeLightningActive.startedAt + 5_000)
+assert.equal(routeLightningConcealed.deadline, routeLightningActive.deadline + 5_000)
+assert.equal(routeLightningConcealed.deadline - 609_000, 6_000)
+assert.equal('pendingAttribution' in routeLightningConcealed, false)
+assert.deepEqual(routeLightningConcealed.pendingCardIds, routeLightningActive.pendingCardIds)
+assert.deepEqual(routeLightningConcealed.scores, routeLightningActive.scores)
+assert.deepEqual(routeLightningConcealed.turnStats, routeLightningActive.turnStats)
+const routeLightningResumed = expectTransition(
+  useGameplayStore.getState().startTurn(609_000),
+)
+assert.equal(routeLightningResumed.phase, GAMEPLAY_PHASES.activeTurn)
+assert.equal(routeLightningResumed.deadline - 609_000, 6_000)
+
+const synchronousLightningActive = createActiveStage([2, 2], 2, 700_000, 38)
+const synchronousLightningCardId = getCurrentGameplayCardId(synchronousLightningActive)
+assert.ok(synchronousLightningCardId)
+useGameplayStore.setState({ game: synchronousLightningActive })
+let synchronouslyObservedAttribution = null
+const unsubscribeFromSynchronousAttribution = useGameplayStore.subscribe((state) => {
+  synchronouslyObservedAttribution = state.game
+})
+const synchronousAttribution = useGameplayStore
+  .getState()
+  .beginLightningAttribution(synchronousLightningCardId, 701_000)
+unsubscribeFromSynchronousAttribution()
+assert.equal(synchronousAttribution.kind, 'success')
+assert.strictEqual(useGameplayStore.getState().game, synchronousAttribution.state)
+assert.strictEqual(synchronouslyObservedAttribution, synchronousAttribution.state)
+assert.equal(synchronousAttribution.state.phase, GAMEPLAY_PHASES.lightningAttribution)
+
 const shuffleBase = createGame([2, 2], 31).state
 let shuffleActive = expectTransition(startGameplayTurn(shuffleBase, 15_000))
 shuffleActive = expectTransition(
@@ -434,10 +1015,29 @@ assert.equal(getTurnIdentity(shuffledHandoff), 'team-2:player-3')
 
 function exhaustCurrentStage(state, now) {
   let current = expectTransition(startGameplayTurn(state, now))
+  let elapsed = 1
   while (current.phase === GAMEPLAY_PHASES.activeTurn) {
     const cardId = getCurrentGameplayCardId(current)
     assert.ok(cardId)
-    current = expectTransition(markGameplayCardCorrect(current, cardId, now + 1))
+    if (current.stageKind === 'lightning') {
+      const attribution = expectTransition(
+        beginLightningCardAttribution(current, cardId, now + elapsed),
+      )
+      const scorerId = current.teams[0].playerIds[0]
+      assert.ok(scorerId)
+      current = expectTransition(
+        awardLightningCardAttribution(
+          attribution,
+          cardId,
+          scorerId,
+          now + elapsed + 1,
+        ),
+      )
+      elapsed += 2
+    } else {
+      current = expectTransition(markGameplayCardCorrect(current, cardId, now + elapsed))
+      elapsed += 1
+    }
   }
   return current
 }
@@ -472,7 +1072,7 @@ assert.equal(
   completeGame.mainDeckCardIds.length * 3 + completeGame.lightningDeckCardIds.length,
 )
 const singleWinners = getWinningTeams(completeGame)
-assert.deepEqual(singleWinners.map((winner) => winner.name), ['Equipo 1'])
+assert.deepEqual(singleWinners.map((winner) => winner.name), ['Equipo 2'])
 completeGame = expectTransition(showGameplayResults(completeGame))
 assert.equal(completeGame.phase, GAMEPLAY_PHASES.results)
 expectTransitionRejected(showGameplayResults(completeGame), 'invalid-phase')
@@ -497,26 +1097,36 @@ for (const turnDuration of [30, 45, 60]) {
     createSeededRandom(turnDuration),
   )
   assert.equal(durationCreation.kind, 'created')
-  const startedAt = 100_000
-  const durationActive = expectTransition(startGameplayTurn(durationCreation.state, startedAt))
-  assert.equal(durationActive.deadline, startedAt + turnDuration * 1_000)
-  const cardId = getCurrentGameplayCardId(durationActive)
-  assert.ok(cardId)
-  const exactDeadlineDecision = expectTransition(
-    markGameplayCardCorrect(durationActive, cardId, durationActive.deadline),
-  )
-  assert.equal(exactDeadlineDecision.phase, GAMEPLAY_PHASES.activeTurn)
-  assert.equal(exactDeadlineDecision.scores[0].score, 1)
-  expectTransitionRejected(
-    expireGameplayTurn(exactDeadlineDecision, durationActive.deadline),
-    'deadline-not-reached',
-  )
-  assert.equal(
-    expectTransition(
-      expireGameplayTurn(exactDeadlineDecision, durationActive.deadline + 1),
-    ).phase,
-    GAMEPLAY_PHASES.timeExpired,
-  )
+  for (const stage of GAMEPLAY_STAGES) {
+    const startedAt = 800_000 + stage.index * 100_000
+    const stageHandoff = placeGameAtStage(durationCreation.state, stage.index)
+    const durationActive = expectTransition(startGameplayTurn(stageHandoff, startedAt))
+    const expectedDuration = stage.kind === 'lightning' ? 10 : turnDuration
+    assert.equal(
+      getGameplayTurnDurationSeconds(stage, turnDuration),
+      expectedDuration,
+    )
+    assert.equal(durationActive.deadline, startedAt + expectedDuration * 1_000)
+
+    if (stage.index !== 0) continue
+    const cardId = getCurrentGameplayCardId(durationActive)
+    assert.ok(cardId)
+    const exactDeadlineDecision = expectTransition(
+      markGameplayCardCorrect(durationActive, cardId, durationActive.deadline),
+    )
+    assert.equal(exactDeadlineDecision.phase, GAMEPLAY_PHASES.activeTurn)
+    assert.equal(exactDeadlineDecision.scores[0].score, 1)
+    expectTransitionRejected(
+      expireGameplayTurn(exactDeadlineDecision, durationActive.deadline),
+      'deadline-not-reached',
+    )
+    assert.equal(
+      expectTransition(
+        expireGameplayTurn(exactDeadlineDecision, durationActive.deadline + 1),
+      ).phase,
+      GAMEPLAY_PHASES.timeExpired,
+    )
+  }
 }
 
 const baseSetup = createSetup([2, 2])
@@ -736,6 +1346,10 @@ const gamePageSource = await readFile(
   new URL('../src/modules/game/game.page.tsx', import.meta.url),
   'utf8',
 )
+const appDrawerSource = await readFile(
+  new URL('../src/modules/common/components/app-drawer/app-drawer.tsx', import.meta.url),
+  'utf8',
+)
 const gameplayCardSource = await readFile(
   new URL('../src/modules/game/components/gameplay-card/gameplay-card.tsx', import.meta.url),
   'utf8',
@@ -745,6 +1359,24 @@ const gameplayCardStyles = await readFile(
     '../src/modules/game/components/gameplay-card/gameplay-card.module.css',
     import.meta.url,
   ),
+  'utf8',
+)
+const lightningAttributionChooserSource = await readFile(
+  new URL(
+    '../src/modules/game/components/lightning-attribution-chooser/lightning-attribution-chooser.tsx',
+    import.meta.url,
+  ),
+  'utf8',
+)
+const lightningAttributionChooserStyles = await readFile(
+  new URL(
+    '../src/modules/game/components/lightning-attribution-chooser/lightning-attribution-chooser.module.css',
+    import.meta.url,
+  ),
+  'utf8',
+)
+const gameplayTimerSource = await readFile(
+  new URL('../src/modules/game/use-gameplay-timer.ts', import.meta.url),
   'utf8',
 )
 const homePageSource = await readFile(
@@ -782,6 +1414,9 @@ assert.match(handoffSource, /Tocá para ver la carta/)
 assert.match(handoffSource, /Continuar turno/)
 assert.match(handoffSource, /GAMEPLAY_PHASES\.concealedActive/)
 assert.match(handoffSource, /game\.pendingCardIds\.length/)
+assert.match(handoffSource, /getGameplayTurnDurationSeconds\(stage, game\.turnDuration\)/)
+assert.match(handoffSource, /JUEGAN TODOS/)
+assert.match(handoffSource, /cualquier jugador puede acertar/)
 assert.match(gamePageSource, /blockInitialActiveCard/)
 assert.match(gamePageSource, /setBlockInitialActiveCard\(false\)[\s\S]*startTurn\(Date\.now\(\)\)/)
 const removedInitialStatus = [
@@ -808,6 +1443,106 @@ assert.equal(
   2,
 )
 assert.doesNotMatch(activeTurnViewSource, /styles\.status/)
+assert.match(
+  activeTurnViewSource,
+  /game\.phase === GAMEPLAY_PHASES\.lightningAttribution/,
+)
+assert.match(
+  activeTurnViewSource,
+  /frozenAt: isAwaitingAttribution \? game\.pendingAttribution\.decidedAt : null/,
+)
+assert.match(activeTurnViewSource, /disabled=\{isAwaitingAttribution\}/)
+assert.match(activeTurnViewSource, /<LightningAttributionChooser/)
+assert.match(
+  activeTurnViewSource,
+  /open=\{attributionChooserCardId === game\.pendingAttribution\.cardId\}/,
+)
+assert.match(lightningAttributionChooserSource, /<AppDrawer/)
+assert.match(lightningAttributionChooserSource, /title="¿Quién acertó\?"/)
+assert.match(lightningAttributionChooserSource, /onClose=\{cancel\}/)
+assert.match(
+  lightningAttributionChooserSource,
+  /<ul className=\{styles\.playerList\} aria-label="Jugadores que pueden recibir el acierto">/,
+)
+assert.match(lightningAttributionChooserSource, /<button\s+type="button"/)
+assert.match(
+  lightningAttributionChooserSource,
+  /aria-label=\{`Atribuir acierto a \$\{player\.name\}, \$\{team\.name\}`\}/,
+)
+assert.match(
+  lightningAttributionChooserSource,
+  /<strong>\{player\.name\}<\/strong>[\s\S]*<span>\{team\.name\}<\/span>/,
+)
+assert.match(
+  lightningAttributionChooserSource,
+  /onClick=\{\(\) => onAward\(cardId, player\.id, Date\.now\(\)\)\}/,
+)
+assert.match(lightningAttributionChooserSource, />\s*Cancelar\s*<\/Button>/)
+assert.doesNotMatch(lightningAttributionChooserSource, /setTimeout|setInterval/)
+assert.match(appDrawerSource, /aria-describedby=\{descriptionId\}/)
+assert.match(appDrawerSource, /aria-labelledby=\{titleId\}/)
+assert.match(appDrawerSource, /closable=\{false\}/)
+assert.match(appDrawerSource, /focusable=\{\{ trap: true, focusTriggerAfterClose: true \}\}/)
+assert.match(appDrawerSource, /\skeyboard\s/)
+assert.match(appDrawerSource, /placement="bottom"/)
+assert.match(appDrawerSource, /onClose=\{onClose\}/)
+assert.match(
+  appDrawerSource,
+  /<hgroup[\s\S]*<h2 id=\{titleId\}>\{title\}<\/h2>[\s\S]*<p id=\{descriptionId\}>\{description\}<\/p>/,
+)
+assert.doesNotMatch(appDrawerSource, /mask=\{false\}/)
+assert.match(
+  lightningAttributionChooserStyles,
+  /\.playerButton\s*\{[^}]*min-height:\s*52px;/,
+)
+assert.match(
+  lightningAttributionChooserStyles,
+  /\.playerButton strong,\s*\.playerButton span\s*\{[^}]*overflow-wrap:\s*anywhere;/,
+)
+assert.match(
+  lightningAttributionChooserStyles,
+  /\.playerButton:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--color-focus\);/,
+)
+assert.match(gameplayTimerSource, /useEffect, useLayoutEffect, useState/)
+assert.match(gameplayTimerSource, /const synchronizedClock = rebaseGameplayTimerClock\(clock, facts\)/)
+const timerLayoutEffectStart = gameplayTimerSource.indexOf('useLayoutEffect(() => {')
+const timerLayoutEffectEnd = gameplayTimerSource.indexOf(
+  '}, [deadline, frozenAt, startedAt])',
+  timerLayoutEffectStart,
+)
+assert.ok(timerLayoutEffectStart >= 0 && timerLayoutEffectEnd > timerLayoutEffectStart)
+const timerLayoutEffectSource = gameplayTimerSource.slice(
+  timerLayoutEffectStart,
+  timerLayoutEffectEnd,
+)
+assert.match(
+  timerLayoutEffectSource,
+  /setClock\(\(currentClock\) =>[\s\S]*rebaseGameplayTimerClock\(currentClock, \{ startedAt, deadline, frozenAt \}\)/,
+)
+assert.match(gameplayTimerSource, /const displayedNow = frozenAt \?\? synchronizedClock\.now/)
+const timerSchedulingEffectStart = gameplayTimerSource.indexOf(
+  'useEffect(() => {',
+  timerLayoutEffectEnd,
+)
+const timerSchedulingEffectEnd = gameplayTimerSource.indexOf(
+  '}, [deadline, frozenAt, onExpire, startedAt])',
+  timerSchedulingEffectStart,
+)
+assert.ok(
+  timerSchedulingEffectStart >= 0 && timerSchedulingEffectEnd > timerSchedulingEffectStart,
+)
+const timerSchedulingEffectSource = gameplayTimerSource.slice(
+  timerSchedulingEffectStart,
+  timerSchedulingEffectEnd,
+)
+const frozenSchedulingGuardIndex = timerSchedulingEffectSource.indexOf(
+  'if (frozenAt !== null) return',
+)
+const deadlineTimeoutIndex = timerSchedulingEffectSource.indexOf('window.setTimeout')
+const cadenceIntervalIndex = timerSchedulingEffectSource.indexOf('window.setInterval')
+assert.ok(frozenSchedulingGuardIndex >= 0)
+assert.ok(deadlineTimeoutIndex > frozenSchedulingGuardIndex)
+assert.ok(cadenceIntervalIndex > frozenSchedulingGuardIndex)
 const handleRevealStart = gamePageSource.indexOf('const handleReveal = () => {')
 const handleRevealEnd = gamePageSource.indexOf('const handleDecision', handleRevealStart)
 assert.ok(handleRevealStart >= 0 && handleRevealEnd > handleRevealStart)
@@ -820,6 +1555,8 @@ for (const meaningfulStatus of [
   'No se pudo aplicar esa acción.',
   'El tiempo terminó antes de resolver la carta.',
   'Carta pasada. Sigue disponible en este turno.',
+  'Acierto registrado. Elegí quién acertó.',
+  'Atribución cancelada. El turno continúa.',
 ]) {
   assert.ok(gamePageSource.includes(meaningfulStatus))
 }
@@ -837,12 +1574,16 @@ assert.equal(
 )
 assert.match(routePrivacyEffectSource, /return \(\) =>/)
 
-const privacyGateStart = gamePageSource.indexOf('if (blockInitialActiveCard')
+const privacyGateStart = gamePageSource.indexOf('blockInitialActiveCard &&')
 const privacyGateEnd = gamePageSource.indexOf('const handleReveal', privacyGateStart)
 assert.ok(privacyGateStart >= 0 && privacyGateEnd > privacyGateStart)
 assert.doesNotMatch(
   gamePageSource.slice(privacyGateStart, privacyGateEnd),
   /CARD_CATALOG_BY_ID|getCurrentGameplayCardId|GameplayCard/,
+)
+assert.match(
+  gamePageSource.slice(privacyGateStart, privacyGateEnd),
+  /GAMEPLAY_PHASES\.lightningAttribution/,
 )
 
 const commitDecisionStart = gameplayCardSource.indexOf('const commitDecision')
@@ -852,7 +1593,7 @@ const commitDecisionSource = gameplayCardSource.slice(commitDecisionStart, commi
 const duplicateLockIndex = commitDecisionSource.indexOf('resolvingRef.current = true')
 const capturedTimeIndex = commitDecisionSource.indexOf('const decidedAt = Date.now()')
 const visualSnapshotIndex = commitDecisionSource.indexOf(
-  'setOutgoingCard(createOutgoingCardSnapshot(card, decision, origin, decidedAt))',
+  'setOutgoingCard(createOutgoingCardSnapshot(card, decision, decisionOrigin, origin, decidedAt))',
 )
 const visualLockIndex = commitDecisionSource.indexOf('setIsResolving(true)')
 const domainDecisionIndex = commitDecisionSource.indexOf(
@@ -871,7 +1612,7 @@ assert.match(gameplayCardSource, /getKeyboardDecision\(event\.key, event\.repeat
 assert.match(gameplayCardSource, /onPointerDown=/)
 assert.match(gameplayCardSource, /onPointerMove=/)
 assert.match(gameplayCardSource, /onPointerUp=/)
-assert.match(gameplayCardSource, /aria-disabled=\{isResolving\}/)
+assert.match(gameplayCardSource, /aria-disabled=\{isResolving \|\| disabled\}/)
 assert.match(gameplayCardSource, /↓ Acertó/)
 assert.match(gameplayCardSource, /↑ Pasar/)
 assert.doesNotMatch(gameplayCardSource, /selectedMain|selectedLightning|unselected/)
@@ -887,15 +1628,20 @@ const passButtonEnd = gameplayActionsSource.indexOf('</Button>', passButtonStart
 assert.ok(passButtonStart >= 0 && passButtonEnd > passButtonStart)
 const passButtonSource = gameplayActionsSource.slice(passButtonStart, passButtonEnd)
 assert.match(passButtonSource, /className=\{styles\.passButton\}/)
-assert.match(passButtonSource, /onClick=\{\(\) => commitDecision\('pass'\)\}/)
+assert.match(
+  passButtonSource,
+  /onClick=\{\(\) => commitDecision\('pass', 'button', RESTING_POSITION\)\}/,
+)
 assert.match(passButtonSource, /↑ Pasar/)
-const passActionIndex = gameplayActionsSource.indexOf("onClick={() => commitDecision('pass')}")
+const passActionIndex = gameplayActionsSource.indexOf(
+  "onClick={() => commitDecision('pass', 'button', RESTING_POSITION)}",
+)
 const correctActionIndex = gameplayActionsSource.indexOf(
-  "onClick={() => commitDecision('correct')}",
+  "onClick={() => commitDecision('correct', 'button', RESTING_POSITION)}",
 )
 assert.ok(passActionIndex >= 0 && correctActionIndex > passActionIndex)
 assert.match(gameplayActionsSource, /className=\{styles\.correctButton\}/)
-assert.equal(gameplayActionsSource.match(/disabled=\{isResolving\}/g)?.length, 2)
+assert.equal(gameplayActionsSource.match(/disabled=\{isResolving \|\| disabled\}/g)?.length, 2)
 
 const gameplayCardRule = gameplayCardStyles.match(/^\.card\s*\{([^}]*)\}/m)
 assert.ok(gameplayCardRule)
@@ -1088,10 +1834,14 @@ const correctButtonActiveRule = getRuleBody(
   '\\.actions \\.correctButton:not\\(:disabled\\):active',
   'Active correct action',
 )
-assert.deepEqual(getDeclaredProperties(correctButtonRule), ['background'])
+assert.deepEqual(getDeclaredProperties(correctButtonRule), ['background', 'box-shadow'])
 assert.equal(
   getDeclarationValue(correctButtonRule, 'background', 'Stage-aware correct action'),
   'var(--stage-action-color)',
+)
+assert.equal(
+  getDeclarationValue(correctButtonRule, 'box-shadow', 'Stage-aware correct action'),
+  'none !important',
 )
 const correctButtonStateRules = new Map([
   ['Hovered correct action', correctButtonHoverRule],
@@ -1158,6 +1908,10 @@ assert.match(
   outgoingCardSource,
   /outgoingCard\.decision === 'correct'[\s\S]*styles\.outgoingCorrect[\s\S]*styles\.outgoingPass/,
 )
+assert.match(
+  outgoingCardSource,
+  /outgoingCard\.decisionOrigin === 'pointer' \? '' : styles\.outgoingControlOrigin/,
+)
 assert.doesNotMatch(
   outgoingCardSource,
   /onClick=|onKeyDown=|onPointer|tabIndex=/,
@@ -1174,6 +1928,58 @@ assert.match(
   gameplayCardStyles,
   /\.outgoingPass\s*\{[^}]*animation:\s*outgoing-card-up 180ms ease-out forwards;/,
 )
+assert.match(
+  gameplayCardStyles,
+  /\.outgoingControlOrigin\s*\{[^}]*animation-duration:\s*320ms;[^}]*animation-timing-function:\s*cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+)
+assert.match(gameplayCardSource, /const POINTER_DECISION_ANIMATION_MS = 180;/)
+assert.match(gameplayCardSource, /const CONTROL_DECISION_ANIMATION_MS = 320;/)
+assert.doesNotMatch(gameplayCardSource, /REDUCED_MOTION_DECISION_ANIMATION_MS/)
+assert.match(
+  gameplayCardSource,
+  /window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/,
+)
+const completeDecisionStart = gameplayCardSource.indexOf('const completeDecision')
+assert.ok(completeDecisionStart >= 0 && commitDecisionStart > completeDecisionStart)
+const completeDecisionSource = gameplayCardSource.slice(
+  completeDecisionStart,
+  commitDecisionStart,
+)
+assert.match(completeDecisionSource, /if \(!resolvingRef\.current\) return;/)
+assert.match(completeDecisionSource, /resolvingRef\.current = false;/)
+assert.match(completeDecisionSource, /setIsResolving\(false\);/)
+assert.match(completeDecisionSource, /setOutgoingCard\(null\);/)
+const reducedMotionBranchStart = commitDecisionSource.indexOf('if (prefersReducedMotion)')
+const reducedMotionBranchEnd = commitDecisionSource.indexOf(
+  'const animationDuration',
+  reducedMotionBranchStart,
+)
+assert.ok(reducedMotionBranchStart >= 0 && reducedMotionBranchEnd > reducedMotionBranchStart)
+const reducedMotionBranch = commitDecisionSource.slice(
+  reducedMotionBranchStart,
+  reducedMotionBranchEnd,
+)
+assert.match(reducedMotionBranch, /completeDecision\(decision, card\.id\);\s*return;/)
+assert.doesNotMatch(reducedMotionBranch, /setTimeout/)
+assert.equal(commitDecisionSource.match(/window\.setTimeout/g)?.length, 1)
+assert.ok(presentationDelayIndex > reducedMotionBranchEnd)
+assert.match(
+  gameplayCardSource,
+  /decisionOrigin === 'pointer'[\s\S]*POINTER_DECISION_ANIMATION_MS[\s\S]*CONTROL_DECISION_ANIMATION_MS/,
+)
+assert.match(
+  gameplayCardSource,
+  /commitDecision\(decision, 'pointer', \{[\s\S]*x: event\.clientX - activePointer\.startX,[\s\S]*y: event\.clientY - activePointer\.startY/,
+)
+assert.match(
+  gameplayCardSource,
+  /commitDecision\(decision, 'keyboard', RESTING_POSITION\)/,
+)
+assert.match(
+  gameplayCardStyles,
+  /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.outgoingCard\s*\{[^}]*animation:\s*none;/,
+)
+assert.doesNotMatch(gameplayCardStyles, /animation-duration:\s*1ms;/)
 assert.match(
   gameplayCardStyles,
   /@keyframes outgoing-card-down[\s\S]*calc\(100dvh \+ 100%\)/,
@@ -1206,14 +2012,14 @@ assert.deepEqual(
       actionColor: 'var(--color-tertiary)',
     },
     {
-      kind: 'sounds',
-      backgroundColor: 'var(--color-secondary-dark)',
-      actionColor: 'var(--color-secondary)',
-    },
-    {
       kind: 'lightning',
       backgroundColor: 'var(--color-primary-dark)',
       actionColor: 'var(--color-primary)',
+    },
+    {
+      kind: 'sounds',
+      backgroundColor: 'var(--color-secondary-dark)',
+      actionColor: 'var(--color-secondary)',
     },
   ],
 )
@@ -1350,6 +2156,18 @@ assert.match(
 )
 assert.match(
   gameplayStoreSource,
+  /beginLightningAttribution:[\s\S]*apply\(beginLightningCardAttribution\(game, cardId, now\)\)/,
+)
+assert.match(
+  gameplayStoreSource,
+  /awardLightningAttribution:[\s\S]*apply\(awardLightningCardAttribution\(game, cardId, playerId, now\)\)/,
+)
+assert.match(
+  gameplayStoreSource,
+  /cancelLightningAttribution:[\s\S]*apply\(cancelLightningCardAttribution\(game, cardId, now\)\)/,
+)
+assert.match(
+  gameplayStoreSource,
   /passCard:[\s\S]*return game \? apply\(passGameplayCard\(game, cardId, now\)\)/,
 )
 assert.match(cardsPageSource, /Comenzar partida/)
@@ -1357,5 +2175,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: synchronous store decisions, independent outgoing-card overlays, inclusive deadline ordering, route conceal/resume deadline continuity, 30/45/60-second timers, quota compatibility, behavioral identity replacement ordering, exact decks, rotation, stage completion, privacy structure, hidden active live regions with empty initial feedback and later meaningful announcements, dark-background/normal-action stage pairings, reduced-motion-safe active entry animation, pill action controls, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, shared borderless card tokens, and persistence boundaries are valid.',
+  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, outgoing-card motion branches, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and animation timing, screen-reader output, and viewport layout remain manual checks.',
 )

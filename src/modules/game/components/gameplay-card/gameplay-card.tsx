@@ -9,8 +9,12 @@ import styles from './gameplay-card.module.css';
 
 interface GameplayCardProps {
     card: GameCard;
+    disabled?: boolean;
     onDecision: (decision: SwipeDecision, cardId: CardId, decidedAt: number) => GameplayTransitionResult;
+    onDecisionAnimationComplete?: (decision: SwipeDecision, cardId: CardId) => void;
 }
+
+type DecisionOrigin = 'pointer' | 'button' | 'keyboard';
 
 interface DragPosition {
     x: number;
@@ -29,6 +33,7 @@ interface OutgoingCardSnapshot {
     readonly card: GameplayCardVisual;
     readonly decidedAt: number;
     readonly decision: SwipeDecision;
+    readonly decisionOrigin: DecisionOrigin;
     readonly origin: Readonly<DragPosition>;
 }
 
@@ -38,7 +43,8 @@ interface ActivePointer {
     startY: number;
 }
 
-const DECISION_ANIMATION_MS = 180;
+const POINTER_DECISION_ANIMATION_MS = 180;
+const CONTROL_DECISION_ANIMATION_MS = 320;
 const RESTING_POSITION: DragPosition = { x: 0, y: 0 };
 
 function getCardRotation(x: number) {
@@ -52,6 +58,7 @@ function getCardOpacity(y: number) {
 function createOutgoingCardSnapshot(
     card: GameCard,
     decision: SwipeDecision,
+    decisionOrigin: DecisionOrigin,
     origin: DragPosition,
     decidedAt: number,
 ): OutgoingCardSnapshot {
@@ -65,6 +72,7 @@ function createOutgoingCardSnapshot(
         },
         decidedAt,
         decision,
+        decisionOrigin,
         origin: { ...origin },
     };
 }
@@ -93,7 +101,12 @@ function GameplayCardContents({ card }: { card: GameplayCardVisual }) {
     );
 }
 
-export function GameplayCard({ card, onDecision }: GameplayCardProps) {
+export function GameplayCard({
+    card,
+    disabled = false,
+    onDecision,
+    onDecisionAnimationComplete,
+}: GameplayCardProps) {
     const instructionId = useId();
     const cardRef = useRef<HTMLElement>(null);
     const activePointerRef = useRef<ActivePointer | null>(null);
@@ -111,32 +124,54 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
     }, []);
 
     useEffect(() => {
-        if (!isResolving) cardRef.current?.focus();
-    }, [card.id, isResolving]);
+        if (!disabled && !isResolving) cardRef.current?.focus();
+    }, [card.id, disabled, isResolving]);
 
-    const commitDecision = (decision: SwipeDecision, origin = dragPosition) => {
-        if (resolvingRef.current) return;
+    const completeDecision = (decision: SwipeDecision | null, cardId: CardId) => {
+        if (!resolvingRef.current) return;
+        if (animationTimerRef.current !== null) {
+            window.clearTimeout(animationTimerRef.current);
+            animationTimerRef.current = null;
+        }
+        activePointerRef.current = null;
+        resolvingRef.current = false;
+        setIsResolving(false);
+        setOutgoingCard(null);
+        if (decision) onDecisionAnimationComplete?.(decision, cardId);
+    };
+
+    const commitDecision = (
+        decision: SwipeDecision,
+        decisionOrigin: DecisionOrigin,
+        origin: DragPosition,
+    ) => {
+        if (disabled || resolvingRef.current) return;
         resolvingRef.current = true;
         const decidedAt = Date.now();
-        setOutgoingCard(createOutgoingCardSnapshot(card, decision, origin, decidedAt));
+        setOutgoingCard(createOutgoingCardSnapshot(card, decision, decisionOrigin, origin, decidedAt));
         setIsResolving(true);
         setIsDragging(false);
         setDragPosition(RESTING_POSITION);
         const result = onDecision(decision, card.id, decidedAt);
         if (result.kind === 'rejected') {
-            resolvingRef.current = false;
-            setIsResolving(false);
-            setOutgoingCard(null);
+            completeDecision(null, card.id);
             return;
         }
 
-        animationTimerRef.current = window.setTimeout(() => {
-            animationTimerRef.current = null;
-            activePointerRef.current = null;
-            resolvingRef.current = false;
-            setIsResolving(false);
-            setOutgoingCard(null);
-        }, DECISION_ANIMATION_MS);
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (prefersReducedMotion) {
+            completeDecision(decision, card.id);
+            return;
+        }
+
+        const animationDuration =
+            decisionOrigin === 'pointer'
+                ? POINTER_DECISION_ANIMATION_MS
+                : CONTROL_DECISION_ANIMATION_MS;
+        animationTimerRef.current = window.setTimeout(
+            () => completeDecision(decision, card.id),
+            animationDuration,
+        );
     };
 
     const releasePointer = (event: PointerEvent<HTMLElement>) => {
@@ -146,7 +181,7 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
     };
 
     const handlePointerDown = (event: PointerEvent<HTMLElement>) => {
-        if (resolvingRef.current || !event.isPrimary || event.button !== 0) {
+        if (disabled || resolvingRef.current || !event.isPrimary || event.button !== 0) {
             return;
         }
         activePointerRef.current = {
@@ -175,7 +210,7 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
         setIsDragging(false);
         releasePointer(event);
         if (decision) {
-            commitDecision(decision, {
+            commitDecision(decision, 'pointer', {
                 x: event.clientX - activePointer.startX,
                 y: event.clientY - activePointer.startY,
             });
@@ -203,7 +238,7 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
         event.preventDefault();
         const decision = getKeyboardDecision(event.key, event.repeat);
-        if (decision) commitDecision(decision);
+        if (decision) commitDecision(decision, 'keyboard', RESTING_POSITION);
     };
 
     const cardStyle = {
@@ -229,10 +264,10 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
             <div className={styles.cardStack}>
                 <article
                     ref={cardRef}
-                    className={`${styles.card} ${isDragging ? styles.dragging : ''} ${isResolving ? styles.locked : ''}`}
+                    className={`${styles.card} ${isDragging ? styles.dragging : ''} ${isResolving || disabled ? styles.locked : ''}`}
                     style={cardStyle}
-                    tabIndex={isResolving ? -1 : 0}
-                    aria-disabled={isResolving}
+                    tabIndex={isResolving || disabled ? -1 : 0}
+                    aria-disabled={isResolving || disabled}
                     aria-label={`${card.title.value}, ${card.character.value}, ${card.everything.value}, palabra clave ${card.keyword}`}
                     aria-describedby={instructionId}
                     aria-keyshortcuts="ArrowDown ArrowUp"
@@ -250,6 +285,8 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
                         key={`${outgoingCard.card.id}-${outgoingCard.decidedAt}`}
                         className={`${styles.card} ${styles.outgoingCard} ${
                             outgoingCard.decision === 'correct' ? styles.outgoingCorrect : styles.outgoingPass
+                        } ${
+                            outgoingCard.decisionOrigin === 'pointer' ? '' : styles.outgoingControlOrigin
                         }`}
                         style={outgoingCardStyle}
                         aria-hidden="true"
@@ -262,9 +299,9 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
                 <Button
                     className={styles.passButton}
                     size="large"
-                    disabled={isResolving}
+                    disabled={isResolving || disabled}
                     aria-keyshortcuts="ArrowUp"
-                    onClick={() => commitDecision('pass')}
+                    onClick={() => commitDecision('pass', 'button', RESTING_POSITION)}
                 >
                     ↑ Pasar
                 </Button>
@@ -272,9 +309,9 @@ export function GameplayCard({ card, onDecision }: GameplayCardProps) {
                     className={styles.correctButton}
                     type="primary"
                     size="large"
-                    disabled={isResolving}
+                    disabled={isResolving || disabled}
                     aria-keyshortcuts="ArrowDown"
-                    onClick={() => commitDecision('correct')}
+                    onClick={() => commitDecision('correct', 'button', RESTING_POSITION)}
                 >
                     ↓ Acertó
                 </Button>

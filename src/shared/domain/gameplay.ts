@@ -1,3 +1,4 @@
+import type { TurnDuration } from '../constants/setup.ts'
 import { CARD_DRAFT_PHASES, type CardId } from '../types/card-draft.ts'
 import {
   GAMEPLAY_PHASES,
@@ -20,6 +21,12 @@ import { createCardDraftSetupKey, getCardDraftSessionErrors } from './card-draft
 
 export type GameplayRandomSource = () => number
 
+type ActiveGameplayState = Extract<GameplayState, { phase: 'active-turn' }>
+type LightningAttributionGameplayState = Extract<
+  GameplayState,
+  { phase: 'lightning-attribution' }
+>
+
 const MIN_PLAYERS = 4
 const MAX_PLAYERS = 20
 const MIN_PLAYERS_PER_TEAM = 2
@@ -41,6 +48,14 @@ function shuffleCardIds(cardIds: readonly CardId[], random: GameplayRandomSource
     ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
   }
   return shuffled
+}
+
+function getSourceCardIdsForStage(
+  stage: GameplayStage,
+  mainDeckCardIds: readonly CardId[],
+  lightningDeckCardIds: readonly CardId[],
+) {
+  return stage.source === 'main' ? mainDeckCardIds : lightningDeckCardIds
 }
 
 function getDraftTeamSignature(input: GameplaySetupInput) {
@@ -187,6 +202,11 @@ export function createGameplayState(
   if (validation.kind === 'rejected') return validation
 
   const firstStage = GAMEPLAY_STAGES[0]
+  const firstStageCardIds = getSourceCardIdsForStage(
+    firstStage,
+    validation.mainDeckCardIds,
+    validation.lightningDeckCardIds,
+  )
   const state: GameplayState = {
     phase: GAMEPLAY_PHASES.handoff,
     setupKey: validation.setupKey,
@@ -195,7 +215,7 @@ export function createGameplayState(
     lightningDeckCardIds: [...validation.lightningDeckCardIds],
     stageIndex: firstStage.index,
     stageKind: firstStage.kind,
-    pendingCardIds: shuffleCardIds(validation.mainDeckCardIds, random),
+    pendingCardIds: shuffleCardIds(firstStageCardIds, random),
     teams: validation.teams,
     scores: validation.teams.map((team) => ({ teamId: team.id, score: 0 })),
     currentTeamIndex: 0,
@@ -231,6 +251,13 @@ export function getCurrentTurnParticipant(
 
 export function getCurrentGameplayCardId(state: GameplayState) {
   return state.pendingCardIds[0] ?? null
+}
+
+export function getGameplayTurnDurationSeconds(
+  stage: GameplayStage,
+  configuredTurnDuration: TurnDuration,
+) {
+  return stage.kind === 'lightning' ? 10 : configuredTurnDuration
 }
 
 function getNextRotation(state: GameplayState) {
@@ -275,27 +302,64 @@ export function startGameplayTurn(
   ) {
     return reject('invalid-phase')
   }
-  if (!Number.isFinite(now)) return reject('invalid-time')
+  if (!Number.isFinite(now)) return reject('invalid-timestamp')
 
   if (state.phase === GAMEPLAY_PHASES.concealedActive) {
+    if (now < state.startedAt) return reject('invalid-timestamp')
     if (now > state.deadline) return expireGameplayTurn(state, now)
     return success({ ...state, phase: GAMEPLAY_PHASES.activeTurn })
   }
 
   if (!getCurrentTurnParticipant(state)) return reject('invalid-participant')
   if (!getCurrentGameplayCardId(state)) return reject('empty-deck')
+  const stage = GAMEPLAY_STAGES[state.stageIndex]
+  if (!stage || stage.kind !== state.stageKind) return reject('invalid-stage')
 
   return success({
     ...state,
     phase: GAMEPLAY_PHASES.activeTurn,
     startedAt: now,
-    deadline: now + state.turnDuration * 1_000,
+    deadline: now + getGameplayTurnDurationSeconds(stage, state.turnDuration) * 1_000,
   })
 }
 
-export function concealActiveGameplayTurn(state: GameplayState): GameplayTransitionResult {
+function resumeLightningAttribution(
+  state: LightningAttributionGameplayState,
+  now: number,
+): ActiveGameplayState {
+  const pauseDuration = now - state.pendingAttribution.pausedAt
+  const { pendingAttribution, ...activeState } = state
+  void pendingAttribution
+  return {
+    ...activeState,
+    phase: GAMEPLAY_PHASES.activeTurn,
+    startedAt: state.startedAt + pauseDuration,
+    deadline: state.deadline + pauseDuration,
+  }
+}
+
+export function concealActiveGameplayTurn(
+  state: GameplayState,
+  now: number,
+): GameplayTransitionResult {
+  if (
+    state.phase !== GAMEPLAY_PHASES.activeTurn &&
+    state.phase !== GAMEPLAY_PHASES.lightningAttribution &&
+    state.phase !== GAMEPLAY_PHASES.concealedActive
+  ) {
+    return reject('invalid-phase')
+  }
+  if (!Number.isFinite(now)) return reject('invalid-timestamp')
+  if (state.phase === GAMEPLAY_PHASES.lightningAttribution) {
+    if (now < state.pendingAttribution.pausedAt) return reject('invalid-timestamp')
+    const resumedState = resumeLightningAttribution(state, now)
+    return success({
+      ...resumedState,
+      phase: GAMEPLAY_PHASES.concealedActive,
+    })
+  }
+  if (now < state.startedAt) return reject('invalid-timestamp')
   if (state.phase === GAMEPLAY_PHASES.concealedActive) return success(state)
-  if (state.phase !== GAMEPLAY_PHASES.activeTurn) return reject('invalid-phase')
   return success({
     ...state,
     phase: GAMEPLAY_PHASES.concealedActive,
@@ -306,6 +370,7 @@ export function expireGameplayTurn(
   state: GameplayState,
   now: number,
 ): GameplayTransitionResult {
+  if (!Number.isFinite(now)) return reject('invalid-timestamp')
   if (state.phase === GAMEPLAY_PHASES.timeExpired) return success(state)
   if (
     state.phase !== GAMEPLAY_PHASES.activeTurn &&
@@ -313,7 +378,7 @@ export function expireGameplayTurn(
   ) {
     return reject('invalid-phase')
   }
-  if (!Number.isFinite(now)) return reject('invalid-time')
+  if (now < state.startedAt) return reject('invalid-timestamp')
   if (now <= state.deadline) return reject('deadline-not-reached')
 
   const participant = getCurrentTurnParticipant(state)
@@ -335,29 +400,44 @@ export function expireGameplayTurn(
 }
 
 function expireAtBoundary(
-  state: Extract<GameplayState, { phase: 'active-turn' }>,
+  state: ActiveGameplayState,
   now: number,
 ) {
   return now > state.deadline ? expireGameplayTurn(state, now) : null
 }
 
-export function markGameplayCardCorrect(
-  state: GameplayState,
-  cardId: CardId,
-  now: number,
-): GameplayTransitionResult {
-  if (state.phase !== GAMEPLAY_PHASES.activeTurn) return reject('invalid-phase')
-  if (!Number.isFinite(now)) return reject('invalid-time')
-  const boundaryResult = expireAtBoundary(state, now)
-  if (boundaryResult) return boundaryResult
-  if (!getCurrentGameplayCardId(state)) return reject('empty-deck')
-  if (getCurrentGameplayCardId(state) !== cardId) return reject('stale-card')
+function reconcileActiveDecisionTimestamp(
+  state: ActiveGameplayState,
+  decidedAt: number,
+) {
+  if (!Number.isFinite(decidedAt) || decidedAt < state.startedAt) {
+    return reject('invalid-timestamp')
+  }
+  return expireAtBoundary(state, decidedAt)
+}
 
+function getValidatedStage(state: GameplayState) {
+  const stage = GAMEPLAY_STAGES[state.stageIndex]
+  return stage?.kind === state.stageKind ? stage : null
+}
+
+function getUniquePlayerTeam(state: GameplayState, playerId: string) {
+  const memberships = state.teams.flatMap((team) =>
+    team.playerIds.flatMap((candidateId) => (candidateId === playerId ? [team] : [])),
+  )
+  return memberships.length === 1 ? memberships[0] : null
+}
+
+function applyCorrectGameplayCard(
+  state: ActiveGameplayState,
+  scoringTeam: GameplayTeam,
+  scoringPlayerId: string,
+): GameplayTransitionResult {
   const participant = getCurrentTurnParticipant(state)
   if (!participant) return reject('invalid-participant')
   const pendingCardIds = state.pendingCardIds.slice(1)
   const scores = state.scores.map((score) =>
-    score.teamId === participant.team.id ? { ...score, score: score.score + 1 } : score,
+    score.teamId === scoringTeam.id ? { ...score, score: score.score + 1 } : score,
   )
   const turnStats = { ...state.turnStats, correct: state.turnStats.correct + 1 }
 
@@ -375,8 +455,8 @@ export function markGameplayCardCorrect(
   const completedStage = {
     stageIndex: state.stageIndex,
     stageKind: state.stageKind,
-    completedByTeamId: participant.team.id,
-    completedByPlayerId: participant.playerId,
+    completedByTeamId: scoringTeam.id,
+    completedByPlayerId: scoringPlayerId,
     scores: scores.map((score) => ({ ...score })),
   }
   const isFinalStage = state.stageIndex === GAMEPLAY_STAGES.at(-1)?.index
@@ -393,15 +473,99 @@ export function markGameplayCardCorrect(
   })
 }
 
+export function markGameplayCardCorrect(
+  state: GameplayState,
+  cardId: CardId,
+  now: number,
+): GameplayTransitionResult {
+  if (state.phase !== GAMEPLAY_PHASES.activeTurn) return reject('invalid-phase')
+  const timestampResult = reconcileActiveDecisionTimestamp(state, now)
+  if (timestampResult) return timestampResult
+  const stage = getValidatedStage(state)
+  if (!stage) return reject('invalid-stage')
+  if (stage.kind === 'lightning') return reject('attribution-required')
+  if (!getCurrentGameplayCardId(state)) return reject('empty-deck')
+  if (getCurrentGameplayCardId(state) !== cardId) return reject('stale-card')
+
+  const participant = getCurrentTurnParticipant(state)
+  if (!participant) return reject('invalid-participant')
+  return applyCorrectGameplayCard(state, participant.team, participant.playerId)
+}
+
+export function beginLightningCardAttribution(
+  state: GameplayState,
+  cardId: CardId,
+  decidedAt: number,
+): GameplayTransitionResult {
+  if (state.phase !== GAMEPLAY_PHASES.activeTurn) return reject('invalid-phase')
+  const timestampResult = reconcileActiveDecisionTimestamp(state, decidedAt)
+  if (timestampResult) return timestampResult
+  const stage = getValidatedStage(state)
+  if (!stage || stage.kind !== 'lightning') return reject('invalid-stage')
+  const currentCardId = getCurrentGameplayCardId(state)
+  if (!currentCardId) return reject('empty-deck')
+  if (currentCardId !== cardId) return reject('stale-card')
+
+  return success({
+    ...state,
+    phase: GAMEPLAY_PHASES.lightningAttribution,
+    pendingAttribution: {
+      cardId,
+      decidedAt,
+      pausedAt: decidedAt,
+    },
+  })
+}
+
+export function awardLightningCardAttribution(
+  state: GameplayState,
+  cardId: CardId,
+  playerId: string,
+  now: number,
+): GameplayTransitionResult {
+  if (state.phase !== GAMEPLAY_PHASES.lightningAttribution) return reject('invalid-phase')
+  if (!Number.isFinite(now) || now < state.pendingAttribution.pausedAt) {
+    return reject('invalid-timestamp')
+  }
+  if (
+    state.pendingAttribution.cardId !== cardId ||
+    getCurrentGameplayCardId(state) !== cardId
+  ) {
+    return reject('stale-card')
+  }
+  const scoringTeam = getUniquePlayerTeam(state, playerId)
+  if (!scoringTeam) return reject('invalid-player-membership')
+  const resumedState = resumeLightningAttribution(state, now)
+  return applyCorrectGameplayCard(resumedState, scoringTeam, playerId)
+}
+
+export function cancelLightningCardAttribution(
+  state: GameplayState,
+  cardId: CardId,
+  now: number,
+): GameplayTransitionResult {
+  if (state.phase !== GAMEPLAY_PHASES.lightningAttribution) return reject('invalid-phase')
+  if (!Number.isFinite(now) || now < state.pendingAttribution.pausedAt) {
+    return reject('invalid-timestamp')
+  }
+  if (
+    state.pendingAttribution.cardId !== cardId ||
+    getCurrentGameplayCardId(state) !== cardId
+  ) {
+    return reject('stale-card')
+  }
+  const resumedState = resumeLightningAttribution(state, now)
+  return success(resumedState)
+}
+
 export function passGameplayCard(
   state: GameplayState,
   cardId: CardId,
   now: number,
 ): GameplayTransitionResult {
   if (state.phase !== GAMEPLAY_PHASES.activeTurn) return reject('invalid-phase')
-  if (!Number.isFinite(now)) return reject('invalid-time')
-  const boundaryResult = expireAtBoundary(state, now)
-  if (boundaryResult) return boundaryResult
+  const timestampResult = reconcileActiveDecisionTimestamp(state, now)
+  if (timestampResult) return timestampResult
   const currentCardId = getCurrentGameplayCardId(state)
   if (!currentCardId) return reject('empty-deck')
   if (currentCardId !== cardId) return reject('stale-card')
@@ -434,10 +598,6 @@ export function shuffleRemainingGameplayCards(
   })
 }
 
-function getStageSource(state: GameplayState, stage: GameplayStage) {
-  return stage.source === 'main' ? state.mainDeckCardIds : state.lightningDeckCardIds
-}
-
 export function prepareNextGameplayStage(
   state: GameplayState,
   random: GameplayRandomSource,
@@ -445,7 +605,11 @@ export function prepareNextGameplayStage(
   if (state.phase !== GAMEPLAY_PHASES.stageComplete) return reject('invalid-phase')
   const nextStage = GAMEPLAY_STAGES[state.stageIndex + 1]
   if (!nextStage) return reject('final-stage')
-  const sourceCardIds = getStageSource(state, nextStage)
+  const sourceCardIds = getSourceCardIdsForStage(
+    nextStage,
+    state.mainDeckCardIds,
+    state.lightningDeckCardIds,
+  )
   if (sourceCardIds.length === 0) return reject('empty-deck')
   const nextRotation = getNextRotation(state)
   if (!nextRotation) return reject('invalid-participant')

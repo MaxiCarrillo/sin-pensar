@@ -7,6 +7,7 @@ import { CARD_CATALOG_BY_ID, CARD_IDS } from '@/shared/catalog/card-catalog'
 import {
   getCurrentGameplayCardId,
   getCurrentTurnParticipant,
+  getGameplayTurnDurationSeconds,
   getScoreForTeam,
   getWinningTeams,
   validateGameplaySetup,
@@ -23,8 +24,10 @@ import {
   type GameplayTeamScore,
   type GameplayTransitionResult,
 } from '@/shared/types/gameplay'
+import type { Player } from '@/shared/types/setup'
 
 import { GameplayCard } from './components/gameplay-card/gameplay-card'
+import { LightningAttributionChooser } from './components/lightning-attribution-chooser/lightning-attribution-chooser'
 import { concealActiveGameplayForRoute } from './game-route-privacy'
 import type { SwipeDecision } from './swipe'
 import styles from './game.module.css'
@@ -41,35 +44,40 @@ function HandoffView({ game, participant, playerName, onReveal }: HandoffViewPro
   const stage = GAMEPLAY_STAGES[game.stageIndex]
   const score = getScoreForTeam(game.scores, participant.team.id)
   const isResuming = game.phase === GAMEPLAY_PHASES.concealedActive
+  const isLightning = stage.kind === 'lightning'
+  const stageDuration = getGameplayTurnDurationSeconds(stage, game.turnDuration)
+  const playerCount = game.teams.reduce((total, team) => total + team.playerIds.length, 0)
 
   return (
     <main className={`${styles.page} ${styles.handoffPage}`}>
       <section className={styles.handoff} aria-labelledby="game-handoff-player">
         <div className={styles.handoffContent}>
-          <p className={styles.turnLabel}>Turno de:</p>
-          <h1 id="game-handoff-player">{playerName}</h1>
+          <p className={styles.turnLabel}>{isLightning ? 'JUEGAN TODOS' : 'Turno de:'}</p>
+          <h1 id="game-handoff-player">{isLightning ? stage.name : playerName}</h1>
           <p className={styles.privacyInstruction}>
-            {isResuming
-              ? 'La carta sigue oculta. El tiempo original no se reiniciará al continuar.'
-              : 'Pasá el dispositivo. La carta se mostrará solo cuando esta persona toque el botón.'}
+            {isLightning
+              ? `${playerName} maneja el dispositivo, pero cualquier jugador puede acertar. La carta se mantiene oculta hasta continuar.`
+              : isResuming
+                ? 'La carta sigue oculta. El tiempo original no se reiniciará al continuar.'
+                : 'Pasá el dispositivo. La carta se mostrará solo cuando esta persona toque el botón.'}
           </p>
           <div className={styles.stageSummary}>
             <p className={styles.stageLabel}>{stage.label}</p>
             <strong>{stage.rule}</strong>
-            <span>{isResuming ? 'Turno en curso' : `${game.turnDuration} segundos`}</span>
+            <span>{isResuming ? 'Turno en curso' : `${stageDuration} segundos`}</span>
           </div>
           <dl className={styles.turnSummary}>
             <div>
-              <dt>Equipo</dt>
-              <dd>{participant.team.name}</dd>
+              <dt>{isLightning ? 'Control' : 'Equipo'}</dt>
+              <dd>{isLightning ? playerName : participant.team.name}</dd>
             </div>
             <div>
               <dt>Cartas</dt>
               <dd>{game.pendingCardIds.length}</dd>
             </div>
             <div>
-              <dt>Puntaje</dt>
-              <dd>{score}</dd>
+              <dt>{isLightning ? 'Participan' : 'Puntaje'}</dt>
+              <dd>{isLightning ? `${playerCount} jugadores` : score}</dd>
             </div>
           </dl>
         </div>
@@ -82,13 +90,23 @@ function HandoffView({ game, participant, playerName, onReveal }: HandoffViewPro
 }
 
 interface ActiveTurnViewProps {
-  game: Extract<GameplayState, { phase: 'active-turn' }>
+  game: Extract<GameplayState, { phase: 'active-turn' | 'lightning-attribution' }>
   participant: CurrentTurnParticipant
+  players: readonly Player[]
   statusMessage: string
   onDecision: (
     decision: SwipeDecision,
     cardId: CardId,
     decidedAt: number,
+  ) => GameplayTransitionResult
+  onAwardLightningAttribution: (
+    cardId: CardId,
+    playerId: string,
+    resolvedAt: number,
+  ) => GameplayTransitionResult
+  onCancelLightningAttribution: (
+    cardId: CardId,
+    resolvedAt: number,
   ) => GameplayTransitionResult
   onExpire: (now: number) => GameplayTransitionResult
 }
@@ -96,17 +114,23 @@ interface ActiveTurnViewProps {
 function ActiveTurnView({
   game,
   participant,
+  players,
   statusMessage,
   onDecision,
+  onAwardLightningAttribution,
+  onCancelLightningAttribution,
   onExpire,
 }: ActiveTurnViewProps) {
+  const [attributionChooserCardId, setAttributionChooserCardId] = useState<CardId | null>(null)
   const stage = GAMEPLAY_STAGES[game.stageIndex]
+  const isAwaitingAttribution = game.phase === GAMEPLAY_PHASES.lightningAttribution
   const cardId = getCurrentGameplayCardId(game)
   const card = cardId ? CARD_CATALOG_BY_ID.get(cardId) : undefined
   const score = getScoreForTeam(game.scores, participant.team.id)
   const { progress, remainingSeconds, liveAnnouncement } = useGameplayTimer({
     startedAt: game.startedAt,
     deadline: game.deadline,
+    frozenAt: isAwaitingAttribution ? game.pendingAttribution.decidedAt : null,
     onExpire,
   })
   const pageStyle = {
@@ -135,7 +159,9 @@ function ActiveTurnView({
               {stage.label} · {stage.rule}
             </p>
             <p className={styles.activeTeam}>
-              {participant.team.name} · {score} puntos
+              {stage.kind === 'lightning'
+                ? 'JUEGAN TODOS'
+                : `${participant.team.name} · ${score} puntos`}
             </p>
           </div>
           <p className={styles.timer} aria-label={`${remainingSeconds} segundos restantes`}>
@@ -143,7 +169,17 @@ function ActiveTurnView({
           </p>
         </header>
         <div className={styles.cardViewport}>
-          <GameplayCard card={card} onDecision={onDecision} />
+          <GameplayCard
+            card={card}
+            disabled={isAwaitingAttribution}
+            onDecision={(decision, decisionCardId, decidedAt) => {
+              if (decision === 'correct') setAttributionChooserCardId(null)
+              return onDecision(decision, decisionCardId, decidedAt)
+            }}
+            onDecisionAnimationComplete={(decision, decisionCardId) => {
+              if (decision === 'correct') setAttributionChooserCardId(decisionCardId)
+            }}
+          />
         </div>
         <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {statusMessage}
@@ -151,6 +187,16 @@ function ActiveTurnView({
         <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {liveAnnouncement}
         </p>
+        {isAwaitingAttribution ? (
+          <LightningAttributionChooser
+            cardId={game.pendingAttribution.cardId}
+            open={attributionChooserCardId === game.pendingAttribution.cardId}
+            players={players}
+            teams={game.teams}
+            onAward={onAwardLightningAttribution}
+            onCancel={onCancelLightningAttribution}
+          />
+        ) : null}
       </section>
     </main>
   )
@@ -215,6 +261,9 @@ function GamePage() {
     game,
     startTurn,
     markCorrect,
+    beginLightningAttribution,
+    awardLightningAttribution,
+    cancelLightningAttribution,
     passCard,
     expireTurn,
     shuffleRemaining,
@@ -225,6 +274,9 @@ function GamePage() {
       game: state.game,
       startTurn: state.startTurn,
       markCorrect: state.markCorrect,
+      beginLightningAttribution: state.beginLightningAttribution,
+      awardLightningAttribution: state.awardLightningAttribution,
+      cancelLightningAttribution: state.cancelLightningAttribution,
       passCard: state.passCard,
       expireTurn: state.expireTurn,
       shuffleRemaining: state.shuffleRemaining,
@@ -234,7 +286,9 @@ function GamePage() {
   )
   const [statusMessage, setStatusMessage] = useState('')
   const [blockInitialActiveCard, setBlockInitialActiveCard] = useState(
-    () => game?.phase === GAMEPLAY_PHASES.activeTurn,
+    () =>
+      game?.phase === GAMEPLAY_PHASES.activeTurn ||
+      game?.phase === GAMEPLAY_PHASES.lightningAttribution,
   )
 
   useEffect(() => {
@@ -283,7 +337,11 @@ function GamePage() {
     : undefined
   if (!participant || !currentPlayer) return <Navigate to="/cards" replace />
 
-  if (blockInitialActiveCard && game.phase === GAMEPLAY_PHASES.activeTurn) {
+  if (
+    blockInitialActiveCard &&
+    (game.phase === GAMEPLAY_PHASES.activeTurn ||
+      game.phase === GAMEPLAY_PHASES.lightningAttribution)
+  ) {
     return (
       <main className={`${styles.page} ${styles.handoffPage}`}>
         <section className={styles.centeredState} aria-live="polite">
@@ -306,8 +364,13 @@ function GamePage() {
   }
 
   const handleDecision = (decision: SwipeDecision, cardId: CardId, decidedAt: number) => {
+    const stage = GAMEPLAY_STAGES[game.stageIndex]
     const result =
-      decision === 'correct' ? markCorrect(cardId, decidedAt) : passCard(cardId, decidedAt)
+      decision === 'correct'
+        ? stage.kind === 'lightning'
+          ? beginLightningAttribution(cardId, decidedAt)
+          : markCorrect(cardId, decidedAt)
+        : passCard(cardId, decidedAt)
     if (result.kind === 'rejected') {
       if (result.reason !== 'invalid-phase' && result.reason !== 'stale-card') {
         setStatusMessage('No se pudo aplicar esa acción.')
@@ -318,12 +381,50 @@ function GamePage() {
       setStatusMessage('El tiempo terminó antes de resolver la carta.')
       return result
     }
+    if (result.state.phase === GAMEPLAY_PHASES.lightningAttribution) {
+      setStatusMessage('Acierto registrado. Elegí quién acertó.')
+      return result
+    }
     const nextScore = getScoreForTeam(result.state.scores, participant.team.id)
     setStatusMessage(
       decision === 'correct'
         ? `Acierto. ${participant.team.name} tiene ${nextScore} puntos.`
         : 'Carta pasada. Sigue disponible en este turno.',
     )
+    return result
+  }
+
+  const handleAwardLightningAttribution = (
+    cardId: CardId,
+    playerId: string,
+    resolvedAt: number,
+  ) => {
+    const result = awardLightningAttribution(cardId, playerId, resolvedAt)
+    if (result.kind === 'rejected') {
+      if (result.reason !== 'invalid-phase' && result.reason !== 'stale-card') {
+        setStatusMessage('No se pudo atribuir el acierto.')
+      }
+      return result
+    }
+
+    const player = players.find((candidate) => candidate.id === playerId)
+    const scoringTeam = result.state.teams.find((team) => team.playerIds.includes(playerId))
+    if (player && scoringTeam) {
+      const nextScore = getScoreForTeam(result.state.scores, scoringTeam.id)
+      setStatusMessage(
+        `Acierto de ${player.name}. ${scoringTeam.name} tiene ${nextScore} puntos.`,
+      )
+    }
+    return result
+  }
+
+  const handleCancelLightningAttribution = (cardId: CardId, resolvedAt: number) => {
+    const result = cancelLightningAttribution(cardId, resolvedAt)
+    if (result.kind === 'success') {
+      setStatusMessage('Atribución cancelada. El turno continúa.')
+    } else if (result.reason !== 'invalid-phase' && result.reason !== 'stale-card') {
+      setStatusMessage('No se pudo cancelar la atribución.')
+    }
     return result
   }
 
@@ -344,12 +445,16 @@ function GamePage() {
         />
       )
     case GAMEPLAY_PHASES.activeTurn:
+    case GAMEPLAY_PHASES.lightningAttribution:
       return (
         <ActiveTurnView
           game={game}
           participant={participant}
+          players={players}
           statusMessage={statusMessage}
           onDecision={handleDecision}
+          onAwardLightningAttribution={handleAwardLightningAttribution}
+          onCancelLightningAttribution={handleCancelLightningAttribution}
           onExpire={expireTurn}
         />
       )

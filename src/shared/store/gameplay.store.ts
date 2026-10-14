@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 
 import {
+  awardLightningCardAttribution,
+  beginLightningCardAttribution,
+  cancelLightningCardAttribution,
   concealActiveGameplayTurn,
   createGameplayState,
   expireGameplayTurn,
@@ -28,9 +31,16 @@ interface GameplayStoreState {
     input: GameplaySetupInput,
     random?: GameplayRandomSource,
   ) => GameplayStartResult
-  concealForPrivacy: () => GameplayTransitionResult
+  concealForPrivacy: (now?: number) => GameplayTransitionResult
   startTurn: (now?: number) => GameplayTransitionResult
   markCorrect: (cardId: CardId, now?: number) => GameplayTransitionResult
+  beginLightningAttribution: (cardId: CardId, now?: number) => GameplayTransitionResult
+  awardLightningAttribution: (
+    cardId: CardId,
+    playerId: string,
+    now?: number,
+  ) => GameplayTransitionResult
+  cancelLightningAttribution: (cardId: CardId, now?: number) => GameplayTransitionResult
   passCard: (cardId: CardId, now?: number) => GameplayTransitionResult
   expireTurn: (now?: number) => GameplayTransitionResult
   shuffleRemaining: (random?: GameplayRandomSource) => GameplayTransitionResult
@@ -63,9 +73,9 @@ export const useGameplayStore = create<GameplayStoreState>()((set, get) => {
       set({ game: creation.state })
       return { kind: 'started', state: creation.state }
     },
-    concealForPrivacy: () => {
+    concealForPrivacy: (now = Date.now()) => {
       const game = get().game
-      return game ? apply(concealActiveGameplayTurn(game)) : missingGame()
+      return game ? apply(concealActiveGameplayTurn(game, now)) : missingGame()
     },
     startTurn: (now = Date.now()) => {
       const game = get().game
@@ -74,6 +84,20 @@ export const useGameplayStore = create<GameplayStoreState>()((set, get) => {
     markCorrect: (cardId, now = Date.now()) => {
       const game = get().game
       return game ? apply(markGameplayCardCorrect(game, cardId, now)) : missingGame()
+    },
+    beginLightningAttribution: (cardId, now = Date.now()) => {
+      const game = get().game
+      return game ? apply(beginLightningCardAttribution(game, cardId, now)) : missingGame()
+    },
+    awardLightningAttribution: (cardId, playerId, now = Date.now()) => {
+      const game = get().game
+      return game
+        ? apply(awardLightningCardAttribution(game, cardId, playerId, now))
+        : missingGame()
+    },
+    cancelLightningAttribution: (cardId, now = Date.now()) => {
+      const game = get().game
+      return game ? apply(cancelLightningCardAttribution(game, cardId, now)) : missingGame()
     },
     passCard: (cardId, now = Date.now()) => {
       const game = get().game

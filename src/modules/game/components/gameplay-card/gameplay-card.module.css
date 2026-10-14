@@ -92,6 +92,11 @@
   animation: outgoing-card-up 180ms ease-out forwards;
 }
 
+.outgoingControlOrigin {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @keyframes outgoing-card-down {
   from {
     opacity: var(--outgoing-card-opacity);
@@ -244,6 +249,7 @@
 
 .actions .correctButton:not(:disabled) {
   background: var(--stage-action-color);
+  box-shadow: none !important;
 }
 
 .actions .correctButton:not(:disabled):hover {
@@ -275,6 +281,6 @@
   }
 
   .outgoingCard {
-    animation-duration: 1ms;
+    animation: none;
   }
 }
