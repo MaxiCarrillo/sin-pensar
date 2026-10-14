@@ -510,7 +510,7 @@ function GamePage() {
         <main className={`${styles.page} ${styles.gameCompletePage}`}>
           <section className={styles.terminalState} aria-labelledby="game-complete-title">
             <div className={styles.terminalContent}>
-              <h1 id="game-complete-title">PARTIDA TERMINADA</h1>
+              <h1 id="game-complete-title">FIN DE LA PARTIDA</h1>
               <p>Los puntajes de las cuatro etapas están listos.</p>
             </div>
             <Button

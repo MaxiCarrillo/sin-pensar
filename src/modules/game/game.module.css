@@ -249,7 +249,7 @@
 }
 
 .gameCompletePage .terminalContent {
-  color: var(--color-text-strong);
+  color: var(--color-surface);
 }
 
 .gameCompleteButton {
