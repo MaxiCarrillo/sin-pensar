@@ -182,10 +182,10 @@ function CardsPage() {
             <p className={styles.privacyInstruction}>
               Pasá el dispositivo a esta persona. Solo él debe ver la siguiente pantalla.
             </p>
-            <div className={styles.deckSummary}>
+            {/* <div className={styles.deckSummary}>
               <span>MAZO PRINCIPAL</span>
               <strong>{mainDeckCardCount} cartas</strong>
-            </div>
+            </div> */}
             {feedback ? (
               <p className={styles.handoffError} role="alert">
                 {feedback}

@@ -841,6 +841,8 @@ assert.deepEqual(
   ),
   { progress: 0.4, remainingSeconds: 6 },
 )
+assert.equal(getGameplayTimerPresentation(1_000, 11_000, 0).progress, 0)
+assert.equal(getGameplayTimerPresentation(1_000, 11_000, 12_000).progress, 1)
 assert.strictEqual(
   rebaseGameplayTimerClock(resumedTimerClock, {
     startedAt: resumedTimerClock.startedAt,
@@ -1930,10 +1932,10 @@ assert.match(
 )
 assert.match(
   gameplayCardStyles,
-  /\.outgoingControlOrigin\s*\{[^}]*animation-duration:\s*320ms;[^}]*animation-timing-function:\s*cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+  /\.outgoingControlOrigin\s*\{[^}]*animation-duration:\s*1800ms;[^}]*animation-timing-function:\s*cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
 )
 assert.match(gameplayCardSource, /const POINTER_DECISION_ANIMATION_MS = 180;/)
-assert.match(gameplayCardSource, /const CONTROL_DECISION_ANIMATION_MS = 320;/)
+assert.match(gameplayCardSource, /const CONTROL_DECISION_ANIMATION_MS = 1800;/)
 assert.doesNotMatch(gameplayCardSource, /REDUCED_MOTION_DECISION_ANIMATION_MS/)
 assert.match(
   gameplayCardSource,
@@ -1989,7 +1991,9 @@ assert.match(
   /@keyframes outgoing-card-up[\s\S]*calc\(-100dvh - 100%\)/,
 )
 
-assert.match(gamePageSource, /'--timer-progress': `\$\{progress \* 100\}%`/)
+assert.match(gamePageSource, /'--timer-progress-scale': progress,/)
+assert.doesNotMatch(gamePageSource, /'--timer-progress':/)
+assert.doesNotMatch(gamePageSource, /progress \* 100/)
 assert.match(
   gamePageSource,
   /'--stage-background-color': stage\.backgroundColor,[\s\S]*'--stage-action-color': stage\.actionColor/,
@@ -2023,12 +2027,72 @@ assert.deepEqual(
     },
   ],
 )
+const pageRule = getRuleBody(gameStyles, '\\.page', 'Gameplay page stacking context')
+assert.match(pageRule, /position:\s*relative;/)
+assert.match(pageRule, /isolation:\s*isolate;/)
+const pageBackgroundRule = getRuleBody(
+  gameStyles,
+  '\\.page::before',
+  'Base viewport background layer',
+)
+assert.equal(getDeclarationValue(pageBackgroundRule, 'content', 'Base viewport background layer'), "''")
+assert.equal(getDeclarationValue(pageBackgroundRule, 'position', 'Base viewport background layer'), 'fixed')
+assert.equal(getDeclarationValue(pageBackgroundRule, 'z-index', 'Base viewport background layer'), '-2')
+assert.equal(getDeclarationValue(pageBackgroundRule, 'inset', 'Base viewport background layer'), '0')
+assert.equal(
+  getDeclarationValue(pageBackgroundRule, 'background', 'Base viewport background layer'),
+  'var(--color-background)',
+)
 const activePageRule = getRuleBody(gameStyles, '\\.activePage', 'Active game stage tokens')
+assert.match(activePageRule, /--timer-progress-scale:\s*0;/)
 assert.match(activePageRule, /--stage-background-color:\s*var\(--color-primary-dark\);/)
 assert.match(activePageRule, /--stage-action-color:\s*var\(--color-primary\);/)
-assert.match(
+const activeOverlayRule = getRuleBody(
   gameStyles,
-  /\.activePage::before\s*\{[^}]*linear-gradient\([\s\S]*var\(--stage-background-color\) 0 var\(--timer-progress\),[\s\S]*var\(--color-background\) var\(--timer-progress\) 100%/,
+  '\\.activePage::after',
+  'Active timer stage-color overlay',
+)
+assert.equal(getDeclarationValue(activeOverlayRule, 'content', 'Active timer stage-color overlay'), "''")
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'position', 'Active timer stage-color overlay'),
+  'fixed',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'z-index', 'Active timer stage-color overlay'),
+  '-1',
+)
+assert.equal(getDeclarationValue(activeOverlayRule, 'inset', 'Active timer stage-color overlay'), '0')
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'background', 'Active timer stage-color overlay'),
+  'var(--stage-background-color)',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'pointer-events', 'Active timer stage-color overlay'),
+  'none',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'transform', 'Active timer stage-color overlay'),
+  'scaleY(var(--timer-progress-scale))',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'transform-origin', 'Active timer stage-color overlay'),
+  'bottom',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'transition', 'Active timer stage-color overlay'),
+  'transform 100ms linear',
+)
+assert.equal(
+  getDeclarationValue(activeOverlayRule, 'will-change', 'Active timer stage-color overlay'),
+  'transform',
+)
+assert.equal(gameStyles.match(/will-change\s*:/g)?.length, 1)
+assert.doesNotMatch(gameStyles, /\.activePage::before\s*\{/)
+assert.doesNotMatch([activePageRule, activeOverlayRule].join('\n'), /linear-gradient\s*\(/)
+assert.doesNotMatch(gameStyles, /--timer-progress\s*:/)
+assert.doesNotMatch(
+  gameStyles,
+  /\.(?:handoffPage|timeoutPage|stageCompletePage|gameCompletePage|resultsPage)::after/,
 )
 assert.match(gameStyles, /\.timeoutPage::before\s*\{\s*background:\s*var\(--color-secondary\);/)
 assert.match(gameStyles, /\.gameCompletePage::before\s*\{\s*background:\s*var\(--color-primary\);/)
@@ -2055,6 +2119,23 @@ assert.match(
   /to\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*translateY\(0\);/,
 )
 assert.doesNotMatch(activeGameAnimation, /scale\(|infinite|flash/i)
+const reducedMotionStart = gameStyles.indexOf('@media (prefers-reduced-motion: reduce)')
+assert.ok(reducedMotionStart >= 0, 'Missing reduced-motion gameplay styles')
+const reducedMotionStyles = gameStyles.slice(reducedMotionStart)
+const reducedMotionActiveOverlayRule = getRuleBody(
+  reducedMotionStyles,
+  '\\.activePage::after',
+  'Reduced-motion active timer overlay',
+)
+assert.deepEqual(getDeclaredProperties(reducedMotionActiveOverlayRule), ['transition'])
+assert.equal(
+  getDeclarationValue(
+    reducedMotionActiveOverlayRule,
+    'transition',
+    'Reduced-motion active timer overlay',
+  ),
+  'none',
+)
 assert.match(
   gameStyles,
   /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.activeHeader,\s*\.cardViewport\s*\{[^}]*animation:\s*none;/,
@@ -2175,5 +2256,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, outgoing-card motion branches, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and animation timing, screen-reader output, and viewport layout remain manual checks.',
+  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, outgoing-card motion branches, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and animation timing, screen-reader output, and viewport layout remain manual checks.',
 )

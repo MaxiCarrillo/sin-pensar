@@ -11,23 +11,28 @@
 .page::before {
   content: '';
   position: fixed;
-  z-index: -1;
+  z-index: -2;
   inset: 0;
   background: var(--color-background);
 }
 
 .activePage {
-  --timer-progress: 0%;
+  --timer-progress-scale: 0;
   --stage-background-color: var(--color-primary-dark);
   --stage-action-color: var(--color-primary);
 }
 
-.activePage::before {
-  background: linear-gradient(
-    to top,
-    var(--stage-background-color) 0 var(--timer-progress),
-    var(--color-background) var(--timer-progress) 100%
-  );
+.activePage::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background: var(--stage-background-color);
+  pointer-events: none;
+  transform: scaleY(var(--timer-progress-scale));
+  transform-origin: bottom;
+  transition: transform 100ms linear;
+  will-change: transform;
 }
 
 .timeoutPage::before {
@@ -369,6 +374,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .activePage::after {
+    transition: none;
+  }
+
   .activeHeader,
   .cardViewport {
     animation: none;

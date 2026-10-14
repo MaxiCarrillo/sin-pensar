@@ -134,7 +134,7 @@ function ActiveTurnView({
     onExpire,
   })
   const pageStyle = {
-    '--timer-progress': `${progress * 100}%`,
+    '--timer-progress-scale': progress,
     '--stage-background-color': stage.backgroundColor,
     '--stage-action-color': stage.actionColor,
   } as CSSProperties
