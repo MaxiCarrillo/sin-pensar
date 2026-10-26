@@ -5,10 +5,15 @@
 
 .playerList {
   display: grid;
+  width: calc(100% + var(--space-shadow-gutter) + var(--space-shadow-gutter));
   max-height: min(52dvh, 26rem);
-  margin: 0;
-  padding: 0;
+  margin-block: 0;
+  margin-inline: calc(-1 * var(--space-shadow-gutter));
+  padding-block-start: var(--space-shadow-gutter);
+  padding-block-end: var(--space-xl);
+  padding-inline: var(--space-shadow-gutter);
   gap: var(--space-xs);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   list-style: none;

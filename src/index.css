@@ -23,6 +23,7 @@
   --color-card-selection: var(--color-tertiary);
   --shadow-card: 0 20px 60px rgba(0, 91, 99, 0.14);
   --shadow-control: 0 8px 20px rgba(0, 91, 99, 0.12);
+  --shadow-edge-control: 0 6px 12px rgba(0, 170, 183, 0.27);
   --shadow-card-face: 2px 4px 8px 0 rgba(0, 0, 0, 0.25);
   --shadow-card-selected: 0 0 8px 1px var(--color-card-selection), var(--shadow-card-face);
   --radius-control-pill: 999px;
@@ -36,6 +37,7 @@
   --space-md: 1rem;
   --space-lg: 1.5rem;
   --space-xl: 2rem;
+  --space-shadow-gutter: var(--space-lg);
   --space-card-band-gutter: 7px;
   --font-size-xs: 0.75rem;
   --font-size-md: 1rem;

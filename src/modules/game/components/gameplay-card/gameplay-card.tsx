@@ -1,5 +1,5 @@
 import { Button } from 'antd';
-import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 
 import type { CardId, GameCard } from '@/shared/types/card-draft';
 import type { GameplayTransitionResult } from '@/shared/types/gameplay';
@@ -9,9 +9,10 @@ import styles from './gameplay-card.module.css';
 
 interface GameplayCardProps {
     card: GameCard;
+    cardRegionClassName?: string;
     disabled?: boolean;
     onDecision: (decision: SwipeDecision, cardId: CardId, decidedAt: number) => GameplayTransitionResult;
-    onDecisionAnimationComplete?: (decision: SwipeDecision, cardId: CardId) => void;
+    onDecisionInteractionComplete?: (decision: SwipeDecision, cardId: CardId) => void;
 }
 
 type DecisionOrigin = 'pointer' | 'button' | 'keyboard';
@@ -30,6 +31,7 @@ interface GameplayCardVisual {
 }
 
 interface OutgoingCardSnapshot {
+    readonly visualId: number;
     readonly card: GameplayCardVisual;
     readonly decidedAt: number;
     readonly decision: SwipeDecision;
@@ -43,8 +45,11 @@ interface ActivePointer {
     startY: number;
 }
 
-const POINTER_DECISION_ANIMATION_MS = 180;
-const CONTROL_DECISION_ANIMATION_MS = 320;
+const POINTER_DECISION_INTERACTION_LOCK_MS = 180;
+const CONTROL_DECISION_INTERACTION_LOCK_MS = 320;
+const POINTER_DECISION_VISUAL_MS = 180;
+const CONTROL_DECISION_VISUAL_MS = 1800;
+const OUTGOING_CARD_CLEANUP_GRACE_MS = 100;
 const RESTING_POSITION: DragPosition = { x: 0, y: 0 };
 
 function getCardRotation(x: number) {
@@ -56,6 +61,7 @@ function getCardOpacity(y: number) {
 }
 
 function createOutgoingCardSnapshot(
+    visualId: number,
     card: GameCard,
     decision: SwipeDecision,
     decisionOrigin: DecisionOrigin,
@@ -63,6 +69,7 @@ function createOutgoingCardSnapshot(
     decidedAt: number,
 ): OutgoingCardSnapshot {
     return {
+        visualId,
         card: {
             id: card.id,
             title: { ...card.title },
@@ -101,43 +108,114 @@ function GameplayCardContents({ card }: { card: GameplayCardVisual }) {
     );
 }
 
+interface OutgoingGameplayCardProps {
+    snapshot: OutgoingCardSnapshot;
+    onVisualComplete: (visualId: number) => void;
+}
+
+function OutgoingGameplayCard({ snapshot, onVisualComplete }: OutgoingGameplayCardProps) {
+    const cardRef = useRef<HTMLElement>(null);
+    const visualDuration =
+        snapshot.decisionOrigin === 'pointer'
+            ? POINTER_DECISION_VISUAL_MS
+            : CONTROL_DECISION_VISUAL_MS;
+    const cardStyle = {
+        '--outgoing-card-opacity': `${getCardOpacity(snapshot.origin.y)}`,
+        '--outgoing-card-rotation': `${getCardRotation(snapshot.origin.x)}deg`,
+        '--outgoing-card-x': `${snapshot.origin.x}px`,
+        '--outgoing-card-y': `${snapshot.origin.y}px`,
+    } as CSSProperties;
+
+    useEffect(() => {
+        const cardElement = cardRef.current;
+        if (!cardElement) return;
+
+        const handleAnimationCancel = (event: AnimationEvent) => {
+            if (event.target === cardElement) onVisualComplete(snapshot.visualId);
+        };
+        cardElement.addEventListener('animationcancel', handleAnimationCancel);
+        const cleanupTimer = window.setTimeout(
+            () => onVisualComplete(snapshot.visualId),
+            visualDuration + OUTGOING_CARD_CLEANUP_GRACE_MS,
+        );
+
+        return () => {
+            cardElement.removeEventListener('animationcancel', handleAnimationCancel);
+            window.clearTimeout(cleanupTimer);
+        };
+    }, [onVisualComplete, snapshot.visualId, visualDuration]);
+
+    return (
+        <article
+            ref={cardRef}
+            className={`${styles.card} ${styles.outgoingCard} ${
+                snapshot.decision === 'correct' ? styles.outgoingCorrect : styles.outgoingPass
+            } ${snapshot.decisionOrigin === 'pointer' ? '' : styles.outgoingControlOrigin}`}
+            style={cardStyle}
+            aria-hidden="true"
+            onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget) onVisualComplete(snapshot.visualId);
+            }}
+        >
+            <GameplayCardContents card={snapshot.card} />
+        </article>
+    );
+}
+
 export function GameplayCard({
     card,
+    cardRegionClassName,
     disabled = false,
     onDecision,
-    onDecisionAnimationComplete,
+    onDecisionInteractionComplete,
 }: GameplayCardProps) {
     const instructionId = useId();
     const cardRef = useRef<HTMLElement>(null);
     const activePointerRef = useRef<ActivePointer | null>(null);
     const resolvingRef = useRef(false);
-    const animationTimerRef = useRef<number | null>(null);
+    const interactionTimerRef = useRef<number | null>(null);
+    const nextVisualIdRef = useRef(1);
     const [dragPosition, setDragPosition] = useState<DragPosition>(RESTING_POSITION);
     const [isDragging, setIsDragging] = useState(false);
     const [isResolving, setIsResolving] = useState(false);
-    const [outgoingCard, setOutgoingCard] = useState<OutgoingCardSnapshot | null>(null);
+    const [outgoingCards, setOutgoingCards] = useState<OutgoingCardSnapshot[]>([]);
 
     useEffect(() => {
         return () => {
-            if (animationTimerRef.current !== null) window.clearTimeout(animationTimerRef.current);
+            if (interactionTimerRef.current !== null) window.clearTimeout(interactionTimerRef.current);
         };
     }, []);
+
+    useLayoutEffect(() => {
+        const cardElement = cardRef.current;
+        if (cardElement) cardElement.scrollTop = 0;
+    }, [card.id]);
 
     useEffect(() => {
         if (!disabled && !isResolving) cardRef.current?.focus();
     }, [card.id, disabled, isResolving]);
 
-    const completeDecision = (decision: SwipeDecision | null, cardId: CardId) => {
-        if (!resolvingRef.current) return;
-        if (animationTimerRef.current !== null) {
-            window.clearTimeout(animationTimerRef.current);
-            animationTimerRef.current = null;
+    const removeOutgoingCard = useCallback((visualId: number) => {
+        setOutgoingCards((currentCards) => {
+            const remainingCards = currentCards.filter((snapshot) => snapshot.visualId !== visualId);
+            return remainingCards.length === currentCards.length ? currentCards : remainingCards;
+        });
+    }, []);
+
+    const releaseDecisionInteraction = () => {
+        if (interactionTimerRef.current !== null) {
+            window.clearTimeout(interactionTimerRef.current);
+            interactionTimerRef.current = null;
         }
         activePointerRef.current = null;
         resolvingRef.current = false;
         setIsResolving(false);
-        setOutgoingCard(null);
-        if (decision) onDecisionAnimationComplete?.(decision, cardId);
+    };
+
+    const completeDecisionInteraction = (decision: SwipeDecision, cardId: CardId) => {
+        if (!resolvingRef.current) return;
+        releaseDecisionInteraction();
+        onDecisionInteractionComplete?.(decision, cardId);
     };
 
     const commitDecision = (
@@ -148,29 +226,42 @@ export function GameplayCard({
         if (disabled || resolvingRef.current) return;
         resolvingRef.current = true;
         const decidedAt = Date.now();
-        setOutgoingCard(createOutgoingCardSnapshot(card, decision, decisionOrigin, origin, decidedAt));
+        const visualId = nextVisualIdRef.current;
+        nextVisualIdRef.current += 1;
+        const outgoingCard = createOutgoingCardSnapshot(
+            visualId,
+            card,
+            decision,
+            decisionOrigin,
+            origin,
+            decidedAt,
+        );
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!prefersReducedMotion) {
+            setOutgoingCards((currentCards) => [...currentCards, outgoingCard]);
+        }
         setIsResolving(true);
         setIsDragging(false);
         setDragPosition(RESTING_POSITION);
         const result = onDecision(decision, card.id, decidedAt);
         if (result.kind === 'rejected') {
-            completeDecision(null, card.id);
+            removeOutgoingCard(visualId);
+            releaseDecisionInteraction();
             return;
         }
 
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (prefersReducedMotion) {
-            completeDecision(decision, card.id);
+            completeDecisionInteraction(decision, card.id);
             return;
         }
 
-        const animationDuration =
+        const interactionLockDuration =
             decisionOrigin === 'pointer'
-                ? POINTER_DECISION_ANIMATION_MS
-                : CONTROL_DECISION_ANIMATION_MS;
-        animationTimerRef.current = window.setTimeout(
-            () => completeDecision(decision, card.id),
-            animationDuration,
+                ? POINTER_DECISION_INTERACTION_LOCK_MS
+                : CONTROL_DECISION_INTERACTION_LOCK_MS;
+        interactionTimerRef.current = window.setTimeout(
+            () => completeDecisionInteraction(decision, card.id),
+            interactionLockDuration,
         );
     };
 
@@ -181,7 +272,16 @@ export function GameplayCard({
     };
 
     const handlePointerDown = (event: PointerEvent<HTMLElement>) => {
-        if (disabled || resolvingRef.current || !event.isPrimary || event.button !== 0) {
+        const isNativeScrollTouch =
+            event.pointerType === 'touch' &&
+            window.getComputedStyle(event.currentTarget).touchAction.includes('pan-y');
+        if (
+            disabled ||
+            resolvingRef.current ||
+            !event.isPrimary ||
+            event.button !== 0 ||
+            isNativeScrollTouch
+        ) {
             return;
         }
         activePointerRef.current = {
@@ -247,53 +347,43 @@ export function GameplayCard({
         '--card-rotation': `${getCardRotation(dragPosition.x)}deg`,
         '--card-opacity': `${getCardOpacity(dragPosition.y)}`,
     } as CSSProperties;
-    const outgoingCardStyle = outgoingCard
-        ? ({
-              '--outgoing-card-opacity': `${getCardOpacity(outgoingCard.origin.y)}`,
-              '--outgoing-card-rotation': `${getCardRotation(outgoingCard.origin.x)}deg`,
-              '--outgoing-card-x': `${outgoingCard.origin.x}px`,
-              '--outgoing-card-y': `${outgoingCard.origin.y}px`,
-          } as CSSProperties)
-        : undefined;
+    const cardRegionClasses = cardRegionClassName
+        ? `${styles.interaction} ${cardRegionClassName}`
+        : styles.interaction;
 
     return (
-        <div className={styles.interaction}>
-            <p id={instructionId} className={styles.instruction}>
-                Deslizá hacia abajo para acertar o hacia arriba para pasar.
-            </p>
-            <div className={styles.cardStack}>
-                <article
-                    ref={cardRef}
-                    className={`${styles.card} ${isDragging ? styles.dragging : ''} ${isResolving || disabled ? styles.locked : ''}`}
-                    style={cardStyle}
-                    tabIndex={isResolving || disabled ? -1 : 0}
-                    aria-disabled={isResolving || disabled}
-                    aria-label={`${card.title.value}, ${card.character.value}, ${card.everything.value}, palabra clave ${card.keyword}`}
-                    aria-describedby={instructionId}
-                    aria-keyshortcuts="ArrowDown ArrowUp"
-                    onKeyDown={handleKeyDown}
-                    onLostPointerCapture={handleLostPointerCapture}
-                    onPointerCancel={handlePointerCancel}
-                    onPointerDown={handlePointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                >
-                    <GameplayCardContents card={card} />
-                </article>
-                {outgoingCard ? (
+        <>
+            <div className={cardRegionClasses}>
+                <p id={instructionId} className={styles.instruction}>
+                    Deslizá hacia abajo para acertar o hacia arriba para pasar.
+                </p>
+                <div className={styles.cardStack}>
                     <article
-                        key={`${outgoingCard.card.id}-${outgoingCard.decidedAt}`}
-                        className={`${styles.card} ${styles.outgoingCard} ${
-                            outgoingCard.decision === 'correct' ? styles.outgoingCorrect : styles.outgoingPass
-                        } ${
-                            outgoingCard.decisionOrigin === 'pointer' ? '' : styles.outgoingControlOrigin
-                        }`}
-                        style={outgoingCardStyle}
-                        aria-hidden="true"
+                        ref={cardRef}
+                        className={`${styles.card} ${isDragging ? styles.dragging : ''} ${isResolving || disabled ? styles.locked : ''}`}
+                        style={cardStyle}
+                        tabIndex={isResolving || disabled ? -1 : 0}
+                        aria-disabled={isResolving || disabled}
+                        aria-label={`${card.title.value}, ${card.character.value}, ${card.everything.value}, palabra clave ${card.keyword}`}
+                        aria-describedby={instructionId}
+                        aria-keyshortcuts="ArrowDown ArrowUp"
+                        onKeyDown={handleKeyDown}
+                        onLostPointerCapture={handleLostPointerCapture}
+                        onPointerCancel={handlePointerCancel}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
                     >
-                        <GameplayCardContents card={outgoingCard.card} />
+                        <GameplayCardContents card={card} />
                     </article>
-                ) : null}
+                    {outgoingCards.map((outgoingCard) => (
+                        <OutgoingGameplayCard
+                            key={outgoingCard.visualId}
+                            snapshot={outgoingCard}
+                            onVisualComplete={removeOutgoingCard}
+                        />
+                    ))}
+                </div>
             </div>
             <div className={styles.actions} aria-label="Acciones de la carta">
                 <Button
@@ -316,6 +406,6 @@ export function GameplayCard({
                     ↓ Acertó
                 </Button>
             </div>
-        </div>
+        </>
     );
 }

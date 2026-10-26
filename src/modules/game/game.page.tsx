@@ -46,17 +46,16 @@ function HandoffView({ game, participant, playerName, onReveal }: HandoffViewPro
   const isResuming = game.phase === GAMEPLAY_PHASES.concealedActive
   const isLightning = stage.kind === 'lightning'
   const stageDuration = getGameplayTurnDurationSeconds(stage, game.turnDuration)
-  const playerCount = game.teams.reduce((total, team) => total + team.playerIds.length, 0)
 
   return (
     <main className={`${styles.page} ${styles.handoffPage}`}>
       <section className={styles.handoff} aria-labelledby="game-handoff-player">
         <div className={styles.handoffContent}>
-          <p className={styles.turnLabel}>{isLightning ? 'JUEGAN TODOS' : 'Turno de:'}</p>
-          <h1 id="game-handoff-player">{isLightning ? stage.name : playerName}</h1>
+          <p className={styles.turnLabel}>Turno de:</p>
+          <h1 id="game-handoff-player">{playerName}</h1>
           <p className={styles.privacyInstruction}>
             {isLightning
-              ? `${playerName} maneja el dispositivo, pero cualquier jugador puede acertar. La carta se mantiene oculta hasta continuar.`
+              ? 'Controla el dispositivo. Todos pueden acertar y la carta se mantiene oculta hasta continuar.'
               : isResuming
                 ? 'La carta sigue oculta. El tiempo original no se reiniciará al continuar.'
                 : 'Pasá el dispositivo. La carta se mostrará solo cuando esta persona toque el botón.'}
@@ -77,7 +76,7 @@ function HandoffView({ game, participant, playerName, onReveal }: HandoffViewPro
             </div>
             <div>
               <dt>{isLightning ? 'Participan' : 'Puntaje'}</dt>
-              <dd>{isLightning ? `${playerCount} jugadores` : score}</dd>
+              <dd>{isLightning ? 'Todos' : score}</dd>
             </div>
           </dl>
         </div>
@@ -168,19 +167,18 @@ function ActiveTurnView({
             {remainingSeconds}s
           </p>
         </header>
-        <div className={styles.cardViewport}>
-          <GameplayCard
-            card={card}
-            disabled={isAwaitingAttribution}
-            onDecision={(decision, decisionCardId, decidedAt) => {
-              if (decision === 'correct') setAttributionChooserCardId(null)
-              return onDecision(decision, decisionCardId, decidedAt)
-            }}
-            onDecisionAnimationComplete={(decision, decisionCardId) => {
-              if (decision === 'correct') setAttributionChooserCardId(decisionCardId)
-            }}
-          />
-        </div>
+        <GameplayCard
+          card={card}
+          cardRegionClassName={styles.cardViewport}
+          disabled={isAwaitingAttribution}
+          onDecision={(decision, decisionCardId, decidedAt) => {
+            if (decision === 'correct') setAttributionChooserCardId(null)
+            return onDecision(decision, decisionCardId, decidedAt)
+          }}
+          onDecisionInteractionComplete={(decision, decisionCardId) => {
+            if (decision === 'correct') setAttributionChooserCardId(decisionCardId)
+          }}
+        />
         <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
           {statusMessage}
         </p>

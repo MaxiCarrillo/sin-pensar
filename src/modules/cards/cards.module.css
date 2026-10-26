@@ -1,4 +1,6 @@
 .page {
+  --route-inline-gutter: var(--space-md);
+
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -122,12 +124,15 @@
 
 .completion {
   display: flex;
-  padding-block: var(--space-sm);
+  width: calc(100% + var(--route-inline-gutter) + var(--route-inline-gutter));
+  margin-inline: calc(-1 * var(--route-inline-gutter));
+  padding: var(--space-sm) var(--space-shadow-gutter);
   align-items: center;
   justify-content: center;
   justify-content: safe center;
   flex-direction: column;
   gap: var(--space-lg);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   text-align: center;
@@ -165,6 +170,10 @@
 
 .selectionLayout {
   display: grid;
+  width: calc(100% + var(--route-inline-gutter) + var(--route-inline-gutter));
+  margin-inline: calc(-1 * var(--route-inline-gutter));
+  padding-inline: var(--route-inline-gutter);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-sm);
   overflow: hidden;
@@ -183,10 +192,14 @@
 }
 
 .lightningSelectionHeader {
+  width: calc(100% + var(--route-inline-gutter) + var(--route-inline-gutter));
+  margin-inline: calc(-1 * var(--route-inline-gutter));
+  padding-inline: var(--route-inline-gutter);
   grid-template-columns: 40px minmax(0, 1fr) 40px;
   grid-template-areas:
     'back title balance'
     'progress progress progress';
+  justify-self: start;
 }
 
 .lightningSelectionHeader::after {
@@ -229,6 +242,19 @@
   grid-area: back;
   align-self: center;
   justify-self: start;
+  box-shadow: var(--shadow-edge-control) !important;
+}
+
+.selectionBackButton:hover,
+.selectionBackButton:active,
+.selectionBackButton:focus {
+  box-shadow: var(--shadow-edge-control) !important;
+}
+
+.selectionBackButton:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+  box-shadow: var(--shadow-edge-control) !important;
 }
 
 .cardScroller {
@@ -281,6 +307,8 @@
 
 @media (max-width: 350px) {
   .page {
+    --route-inline-gutter: var(--space-sm);
+
     padding-inline: var(--space-sm);
   }
 

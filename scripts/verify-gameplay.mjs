@@ -76,6 +76,27 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
+function cssLengthToPixels(value, label) {
+  const absoluteLength = value.match(/^(\d+(?:\.\d+)?)(px|rem)$/)
+  assert.ok(absoluteLength, `${label} must resolve to a px or rem length`)
+  return Number(absoluteLength[1]) * (absoluteLength[2] === 'rem' ? 16 : 1)
+}
+
+function getSingleShadowMetrics(value, label) {
+  assert.equal(typeof value, 'string', `${label} must be defined`)
+  const shadow = value.match(
+    /^(-?\d+(?:\.\d+)?)(?:px)?\s+(-?\d+(?:\.\d+)?)px\s+(\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?\s+(.+)$/,
+  )
+  assert.ok(shadow, `${label} must be one CSS box shadow`)
+  return {
+    offsetX: Number(shadow[1]),
+    offsetY: Number(shadow[2]),
+    blurRadius: Number(shadow[3]),
+    spreadRadius: shadow[4] ? Number(shadow[4]) : 0,
+    color: shadow[5],
+  }
+}
+
 function getRuleBody(source, selectorPattern, label) {
   const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
   assert.ok(rule, `Missing CSS rule: ${label}`)
@@ -1352,6 +1373,10 @@ const appDrawerSource = await readFile(
   new URL('../src/modules/common/components/app-drawer/app-drawer.tsx', import.meta.url),
   'utf8',
 )
+const appDrawerStyles = await readFile(
+  new URL('../src/modules/common/components/app-drawer/app-drawer.module.css', import.meta.url),
+  'utf8',
+)
 const gameplayCardSource = await readFile(
   new URL('../src/modules/game/components/gameplay-card/gameplay-card.tsx', import.meta.url),
   'utf8',
@@ -1417,8 +1442,36 @@ assert.match(handoffSource, /Continuar turno/)
 assert.match(handoffSource, /GAMEPLAY_PHASES\.concealedActive/)
 assert.match(handoffSource, /game\.pendingCardIds\.length/)
 assert.match(handoffSource, /getGameplayTurnDurationSeconds\(stage, game\.turnDuration\)/)
-assert.match(handoffSource, /JUEGAN TODOS/)
-assert.match(handoffSource, /cualquier jugador puede acertar/)
+assert.match(
+  handoffSource,
+  /<p className=\{styles\.turnLabel\}>Turno de:<\/p>\s*<h1 id="game-handoff-player">\{playerName\}<\/h1>\s*<p className=\{styles\.privacyInstruction\}>/,
+)
+assert.match(
+  handoffSource,
+  /Controla el dispositivo\. Todos pueden acertar y la carta se mantiene oculta hasta continuar\./,
+)
+assert.match(
+  handoffSource,
+  /<dt>\{isLightning \? 'Control' : 'Equipo'\}<\/dt>\s*<dd>\{isLightning \? playerName : participant\.team\.name\}<\/dd>/,
+)
+assert.match(
+  handoffSource,
+  /<dt>Cartas<\/dt>\s*<dd>\{game\.pendingCardIds\.length\}<\/dd>/,
+)
+assert.match(
+  handoffSource,
+  /<dt>\{isLightning \? 'Participan' : 'Puntaje'\}<\/dt>\s*<dd>\{isLightning \? 'Todos' : score\}<\/dd>/,
+)
+assert.match(
+  handoffSource,
+  /La carta sigue oculta\. El tiempo original no se reiniciará al continuar\./,
+)
+assert.match(
+  handoffSource,
+  /Pasá el dispositivo\. La carta se mostrará solo cuando esta persona toque el botón\./,
+)
+assert.doesNotMatch(handoffSource, /JUEGAN TODOS|\$\{playerCount\} jugadores/)
+assert.doesNotMatch(handoffSource, /\bplayerCount\b/)
 assert.match(gamePageSource, /blockInitialActiveCard/)
 assert.match(gamePageSource, /setBlockInitialActiveCard\(false\)[\s\S]*startTurn\(Date\.now\(\)\)/)
 const removedInitialStatus = [
@@ -1443,6 +1496,15 @@ assert.equal(
     /<p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">/g,
   )?.length,
   2,
+)
+assert.match(
+  activeTurnViewSource,
+  /<header className=\{styles\.activeHeader\}>[\s\S]*<\/header>\s*<GameplayCard/,
+)
+assert.match(activeTurnViewSource, /cardRegionClassName=\{styles\.cardViewport\}/)
+assert.doesNotMatch(
+  activeTurnViewSource,
+  /<div className=\{styles\.cardViewport\}>/,
 )
 assert.doesNotMatch(activeTurnViewSource, /styles\.status/)
 assert.match(
@@ -1493,6 +1555,13 @@ assert.match(
   /<hgroup[\s\S]*<h2 id=\{titleId\}>\{title\}<\/h2>[\s\S]*<p id=\{descriptionId\}>\{description\}<\/p>/,
 )
 assert.doesNotMatch(appDrawerSource, /mask=\{false\}/)
+const appDrawerContentRule = getRuleBody(
+  appDrawerStyles,
+  '\\.content',
+  'Shared Drawer mobile content cap',
+)
+assert.match(appDrawerContentRule, /width:\s*min\(var\(--mobile-breakpoint\), 100%\);/)
+assert.match(appDrawerContentRule, /margin-inline:\s*auto;/)
 assert.match(
   lightningAttributionChooserStyles,
   /\.playerButton\s*\{[^}]*min-height:\s*52px;/,
@@ -1503,8 +1572,37 @@ assert.match(
 )
 assert.match(
   lightningAttributionChooserStyles,
-  /\.playerButton:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--color-focus\);/,
+  /\.playerButton:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--color-focus\);[^}]*outline-offset:\s*2px;/,
 )
+assert.match(
+  lightningAttributionChooserStyles,
+  /\.playerButton\s*\{[^}]*box-shadow:\s*var\(--shadow-control\);/,
+)
+const playerListRule = getRuleBody(
+  lightningAttributionChooserStyles,
+  '\\.playerList',
+  'Lightning attribution player-list shadow gutter',
+)
+for (const contract of [
+  /width:\s*calc\(100% \+ var\(--space-shadow-gutter\) \+ var\(--space-shadow-gutter\)\);/,
+  /max-height:\s*min\(52dvh, 26rem\);/,
+  /margin-block:\s*0;/,
+  /margin-inline:\s*calc\(-1 \* var\(--space-shadow-gutter\)\);/,
+  /padding-block-start:\s*var\(--space-shadow-gutter\);/,
+  /padding-block-end:\s*var\(--space-xl\);/,
+  /padding-inline:\s*var\(--space-shadow-gutter\);/,
+  /overflow-x:\s*hidden;/,
+  /overflow-y:\s*auto;/,
+]) {
+  assert.match(playerListRule, contract)
+}
+assert.doesNotMatch(playerListRule, /padding-block:\s*/)
+assert.doesNotMatch(playerListRule, /overflow-x:\s*visible;/)
+const playerListCloseIndex = lightningAttributionChooserSource.indexOf('</ul>')
+const attributionCancelIndex = lightningAttributionChooserSource.indexOf(
+  '<Button className={styles.cancelButton}',
+)
+assert.ok(playerListCloseIndex >= 0 && attributionCancelIndex > playerListCloseIndex)
 assert.match(gameplayTimerSource, /useEffect, useLayoutEffect, useState/)
 assert.match(gameplayTimerSource, /const synchronizedClock = rebaseGameplayTimerClock\(clock, facts\)/)
 const timerLayoutEffectStart = gameplayTimerSource.indexOf('useLayoutEffect(() => {')
@@ -1594,22 +1692,40 @@ assert.ok(commitDecisionStart >= 0 && commitDecisionEnd > commitDecisionStart)
 const commitDecisionSource = gameplayCardSource.slice(commitDecisionStart, commitDecisionEnd)
 const duplicateLockIndex = commitDecisionSource.indexOf('resolvingRef.current = true')
 const capturedTimeIndex = commitDecisionSource.indexOf('const decidedAt = Date.now()')
+const visualIdIndex = commitDecisionSource.indexOf('const visualId = nextVisualIdRef.current')
 const visualSnapshotIndex = commitDecisionSource.indexOf(
-  'setOutgoingCard(createOutgoingCardSnapshot(card, decision, decisionOrigin, origin, decidedAt))',
+  'const outgoingCard = createOutgoingCardSnapshot(',
+)
+const visualAppendIndex = commitDecisionSource.indexOf(
+  'setOutgoingCards((currentCards) => [...currentCards, outgoingCard])',
 )
 const visualLockIndex = commitDecisionSource.indexOf('setIsResolving(true)')
 const domainDecisionIndex = commitDecisionSource.indexOf(
   'onDecision(decision, card.id, decidedAt)',
 )
-const presentationDelayIndex = commitDecisionSource.indexOf('window.setTimeout')
+const interactionDelayIndex = commitDecisionSource.indexOf('window.setTimeout')
 assert.ok(duplicateLockIndex >= 0)
 assert.ok(capturedTimeIndex > duplicateLockIndex)
-assert.ok(visualSnapshotIndex > capturedTimeIndex)
-assert.ok(visualLockIndex > visualSnapshotIndex)
+assert.ok(visualIdIndex > capturedTimeIndex)
+assert.ok(visualSnapshotIndex > visualIdIndex)
+assert.ok(visualAppendIndex > visualSnapshotIndex)
+assert.ok(visualLockIndex > visualAppendIndex)
 assert.ok(domainDecisionIndex > visualLockIndex)
-assert.ok(presentationDelayIndex > domainDecisionIndex)
+assert.ok(interactionDelayIndex > domainDecisionIndex)
+assert.match(commitDecisionSource, /nextVisualIdRef\.current \+= 1;/)
+assert.match(
+  commitDecisionSource,
+  /if \(!prefersReducedMotion\) \{\s*setOutgoingCards\(\(currentCards\) => \[\.\.\.currentCards, outgoingCard\]\);\s*\}/,
+)
+assert.doesNotMatch(commitDecisionSource, /CONTROL_DECISION_VISUAL_MS|1800/)
 
 assert.doesNotMatch(gamePageSource, /<GameplayCard\s+key=/)
+assert.match(gameplayCardSource, /onDecisionInteractionComplete\?:/)
+assert.match(activeTurnViewSource, /onDecisionInteractionComplete=/)
+assert.doesNotMatch(
+  `${gameplayCardSource}\n${gamePageSource}`,
+  /onDecisionAnimationComplete/,
+)
 assert.match(gameplayCardSource, /getKeyboardDecision\(event\.key, event\.repeat\)/)
 assert.match(gameplayCardSource, /onPointerDown=/)
 assert.match(gameplayCardSource, /onPointerMove=/)
@@ -1618,6 +1734,51 @@ assert.match(gameplayCardSource, /aria-disabled=\{isResolving \|\| disabled\}/)
 assert.match(gameplayCardSource, /↓ Acertó/)
 assert.match(gameplayCardSource, /↑ Pasar/)
 assert.doesNotMatch(gameplayCardSource, /selectedMain|selectedLightning|unselected/)
+
+const scrollResetStart = gameplayCardSource.indexOf('useLayoutEffect(() => {')
+const scrollResetEnd = gameplayCardSource.indexOf('}, [card.id]);', scrollResetStart)
+const cardFocusEffectStart = gameplayCardSource.indexOf(
+  'useEffect(() => {',
+  scrollResetEnd,
+)
+assert.ok(scrollResetStart >= 0 && scrollResetEnd > scrollResetStart)
+assert.ok(cardFocusEffectStart > scrollResetEnd)
+const scrollResetSource = gameplayCardSource.slice(scrollResetStart, scrollResetEnd)
+assert.match(scrollResetSource, /const cardElement = cardRef\.current;/)
+assert.match(scrollResetSource, /if \(cardElement\) cardElement\.scrollTop = 0;/)
+assert.doesNotMatch(scrollResetSource, /setOutgoingCards|focus\(|scrollTo\(/)
+
+const pointerDownStart = gameplayCardSource.indexOf('const handlePointerDown')
+const pointerMoveStart = gameplayCardSource.indexOf('const handlePointerMove', pointerDownStart)
+assert.ok(pointerDownStart >= 0 && pointerMoveStart > pointerDownStart)
+const pointerDownSource = gameplayCardSource.slice(pointerDownStart, pointerMoveStart)
+const nativeScrollTouchIndex = pointerDownSource.indexOf('const isNativeScrollTouch')
+const activePointerAssignmentIndex = pointerDownSource.indexOf('activePointerRef.current = {')
+const pointerCaptureIndex = pointerDownSource.indexOf('setPointerCapture(event.pointerId)')
+assert.ok(nativeScrollTouchIndex >= 0)
+assert.ok(activePointerAssignmentIndex > nativeScrollTouchIndex)
+assert.ok(pointerCaptureIndex > activePointerAssignmentIndex)
+assert.match(pointerDownSource, /event\.pointerType === 'touch'/)
+assert.match(
+  pointerDownSource,
+  /window\.getComputedStyle\(event\.currentTarget\)\.touchAction\.includes\('pan-y'\)/,
+)
+assert.match(pointerDownSource, /event\.button !== 0 \|\|\s*isNativeScrollTouch/)
+
+const pointerCancelStart = gameplayCardSource.indexOf('const handlePointerCancel')
+const lostPointerCaptureStart = gameplayCardSource.indexOf(
+  'const handleLostPointerCapture',
+  pointerCancelStart,
+)
+assert.ok(pointerCancelStart >= 0 && lostPointerCaptureStart > pointerCancelStart)
+const pointerCancelSource = gameplayCardSource.slice(
+  pointerCancelStart,
+  lostPointerCaptureStart,
+)
+assert.match(pointerCancelSource, /activePointerRef\.current = null;/)
+assert.match(pointerCancelSource, /setIsDragging\(false\);/)
+assert.match(pointerCancelSource, /releasePointer\(event\);/)
+assert.match(pointerCancelSource, /setDragPosition\(RESTING_POSITION\);/)
 
 const gameplayActionsStart = gameplayCardSource.indexOf(
   '<div className={styles.actions} aria-label="Acciones de la carta">',
@@ -1645,12 +1806,56 @@ assert.ok(passActionIndex >= 0 && correctActionIndex > passActionIndex)
 assert.match(gameplayActionsSource, /className=\{styles\.correctButton\}/)
 assert.equal(gameplayActionsSource.match(/disabled=\{isResolving \|\| disabled\}/g)?.length, 2)
 
+assert.match(gameplayCardSource, /cardRegionClassName\?: string;/)
+assert.match(
+  gameplayCardSource,
+  /const cardRegionClasses = cardRegionClassName[\s\S]*styles\.interaction;/,
+)
+assert.match(
+  gameplayCardSource,
+  /<>\s*<div className=\{cardRegionClasses\}>[\s\S]*<div className=\{styles\.cardStack\}>[\s\S]*<\/div>\s*<\/div>\s*<div className=\{styles\.actions\}/,
+)
+
+const gameplayInteractionRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.interaction',
+  'Active gameplay card region',
+)
+for (const contract of [
+  /display:\s*grid;/,
+  /height:\s*100%;/,
+  /min-width:\s*0;/,
+  /min-height:\s*0;/,
+  /grid-template-rows:\s*auto minmax\(0, 1fr\);/,
+]) {
+  assert.match(gameplayInteractionRule, contract)
+}
+const gameplayCardStackRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.cardStack',
+  'Active gameplay card stack',
+)
+assert.match(gameplayCardStackRule, /min-width:\s*0;/)
+assert.match(gameplayCardStackRule, /min-height:\s*0;/)
+assert.match(gameplayCardStackRule, /grid-template-rows:\s*minmax\(0, 1fr\);/)
+assert.match(gameplayCardStackRule, /container-name:\s*gameplay-card-stack;/)
+assert.match(gameplayCardStackRule, /container-type:\s*size;/)
+
 const gameplayCardRule = gameplayCardStyles.match(/^\.card\s*\{([^}]*)\}/m)
 assert.ok(gameplayCardRule)
 assert.match(gameplayCardRule[1], /box-sizing:\s*border-box;/)
 assert.match(gameplayCardRule[1], /width:\s*100%;/)
-assert.match(gameplayCardRule[1], /height:\s*clamp\(400px, 62dvh, 500px\);/)
+assert.match(gameplayCardRule[1], /height:\s*100%;/)
+assert.match(gameplayCardRule[1], /max-height:\s*500px;/)
+assert.match(gameplayCardRule[1], /min-height:\s*0;/)
+assert.match(
+  gameplayCardRule[1],
+  /grid-template-rows:\s*minmax\(38px, 0\.45fr\) repeat\(3, minmax\(72px, 1fr\)\) minmax\(92px, 1\.15fr\);/,
+)
+assert.doesNotMatch(gameplayCardRule[1], /(?:d?vh|aspect-ratio|clamp\()/)
 assert.match(gameplayCardRule[1], /gap:\s*var\(--space-card-band-gutter\);/)
+assert.match(gameplayCardRule[1], /overflow:\s*hidden;/)
+assert.match(gameplayCardRule[1], /touch-action:\s*none;/)
 assert.match(gameplayCardRule[1], /border:\s*0;/)
 assert.match(gameplayCardRule[1], /border-radius:\s*var\(--radius-card-face\);/)
 assert.doesNotMatch(gameplayCardRule[1], /--radius-control-pill/)
@@ -1658,6 +1863,134 @@ assert.match(gameplayCardRule[1], /background:\s*var\(--color-card-surface\);/)
 assert.match(gameplayCardRule[1], /box-shadow:\s*var\(--shadow-card-face\);/)
 assert.doesNotMatch(gameplayCardRule[1], /transparent/)
 assert.doesNotMatch(gameplayCardStyles, /--shadow-card-selected|--border-card-selected/)
+
+const normalCardMinimumHeight = 38 + 3 * 72 + 92 + 4 * 7
+assert.equal(normalCardMinimumHeight, 374)
+const compactCardStart = gameplayCardStyles.indexOf(
+  '@container gameplay-card-stack (max-height: 469px)',
+)
+const compactOverflowStart = gameplayCardStyles.indexOf(
+  '@container gameplay-card-stack (max-height: 215px)',
+  compactCardStart,
+)
+const gameplayReducedMotionStart = gameplayCardStyles.indexOf(
+  '@media (prefers-reduced-motion: reduce)',
+  compactOverflowStart,
+)
+assert.ok(compactCardStart >= 0)
+assert.ok(compactOverflowStart > compactCardStart)
+assert.ok(gameplayReducedMotionStart > compactOverflowStart)
+const compactCardStyles = gameplayCardStyles.slice(compactCardStart, compactOverflowStart)
+const compactOverflowStyles = gameplayCardStyles.slice(
+  compactOverflowStart,
+  gameplayReducedMotionStart,
+)
+const compactCardRule = getRuleBody(
+  compactCardStyles,
+  '\\.card',
+  'Compact active gameplay card',
+)
+const compactRows = compactCardRule.match(
+  /grid-template-rows:\s*(\d+)px repeat\(3, minmax\((\d+)px, 1fr\)\) minmax\((\d+)px, 1\.1fr\);/,
+)
+assert.ok(compactRows)
+assert.equal(
+  getDeclarationValue(compactCardRule, 'gap', 'Compact active gameplay card'),
+  'clamp(3px, 1cqh, var(--space-card-band-gutter))',
+)
+assert.doesNotMatch(compactCardRule, /(?:^|\n)\s*(?:height|min-height|max-height):/)
+const compactMinimumHeight =
+  Number(compactRows[1]) + 3 * Number(compactRows[2]) + Number(compactRows[3]) + 4 * 3
+assert.equal(compactMinimumHeight, 214)
+const practicalCompactHeight = 216
+assert.ok(compactMinimumHeight <= practicalCompactHeight)
+
+const compactCardSectionRule = getRuleBody(
+  compactCardStyles,
+  '\\.cardSection',
+  'Compact card-section spacing',
+)
+assert.match(compactCardSectionRule, /padding-block:\s*clamp\(2px, 1\.2cqh, 6px\);/)
+assert.match(compactCardSectionRule, /padding-inline:\s*var\(--space-xs\);/)
+const compactSemanticBandsRule = getRuleBody(
+  compactCardStyles,
+  '\\.titleSection,\\s*\\.characterSection,\\s*\\.everythingSection',
+  'Compact semantic-band flow',
+)
+assert.match(compactSemanticBandsRule, /align-content:\s*stretch;/)
+assert.match(
+  compactSemanticBandsRule,
+  /grid-template-rows:\s*minmax\(min-content, 1fr\) auto;/,
+)
+assert.match(compactSemanticBandsRule, /row-gap:\s*clamp\(1px, 0\.5cqh, 2px\);/)
+const compactSectionValueRule = getRuleBody(
+  compactCardStyles,
+  '\\.sectionValue',
+  'Compact card value type',
+)
+assert.match(
+  compactSectionValueRule,
+  /font-size:\s*clamp\(0\.75rem, 4cqh, 1\.125rem\);/,
+)
+assert.match(compactSectionValueRule, /line-height:\s*1;/)
+const compactSupportingTypeRule = getRuleBody(
+  compactCardStyles,
+  '\\.sectionSubtype,\\s*\\.keywordLabel',
+  'Compact supporting type',
+)
+assert.match(
+  compactSupportingTypeRule,
+  /font-size:\s*clamp\(0\.5625rem, 2\.3cqh, 0\.6875rem\);/,
+)
+assert.match(compactSupportingTypeRule, /line-height:\s*1;/)
+const compactSubtypeRule = getRuleBody(
+  compactCardStyles,
+  '\\.sectionSubtype',
+  'Compact subtype flow',
+)
+for (const contract of [
+  /position:\s*static;/,
+  /width:\s*100%;/,
+  /max-width:\s*100%;/,
+  /align-self:\s*end;/,
+  /justify-self:\s*end;/,
+]) {
+  assert.match(compactSubtypeRule, contract)
+}
+const compactKeywordSectionRule = getRuleBody(
+  compactCardStyles,
+  '\\.keywordSection',
+  'Compact keyword flow',
+)
+assert.match(
+  compactKeywordSectionRule,
+  /grid-template-rows:\s*auto minmax\(min-content, 1fr\);/,
+)
+assert.match(compactKeywordSectionRule, /row-gap:\s*clamp\(1px, 0\.5cqh, 2px\);/)
+const compactKeywordValueRule = getRuleBody(
+  compactCardStyles,
+  '\\.keywordValue',
+  'Compact keyword value type',
+)
+assert.match(
+  compactKeywordValueRule,
+  /font-size:\s*clamp\(1rem, 4\.5cqh, 1\.375rem\);/,
+)
+assert.match(compactKeywordValueRule, /line-height:\s*1;/)
+assert.doesNotMatch(compactCardStyles, /position:\s*absolute;/)
+assert.doesNotMatch(compactCardStyles, /(?:white-space:\s*nowrap|text-overflow:\s*ellipsis)/)
+assert.doesNotMatch(compactCardStyles, /\.actions/)
+assert.doesNotMatch(compactCardStyles, /touch-action:/)
+const compactOverflowRule = getRuleBody(
+  compactOverflowStyles,
+  '\\.card:not\\(\\.outgoingCard\\)',
+  'Below-minimum compact card overflow',
+)
+assert.match(compactOverflowRule, /overflow-x:\s*hidden;/)
+assert.match(compactOverflowRule, /overflow-y:\s*auto;/)
+assert.match(compactOverflowRule, /overscroll-behavior-y:\s*contain;/)
+assert.match(compactOverflowRule, /touch-action:\s*pan-y;/)
+assert.doesNotMatch(compactOverflowStyles, /\.actions/)
 
 assert.match(
   gameplayCardStyles,
@@ -1711,6 +2044,25 @@ assertRuleUsesPill(
   gameplayCardStyles,
   '\\.actions button',
   'Visible pass and correct buttons',
+)
+const gameplayActionsRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.actions',
+  'Ordinary-flow active gameplay actions',
+)
+for (const contract of [
+  /display:\s*grid;/,
+  /width:\s*100%;/,
+  /min-width:\s*0;/,
+  /grid-row:\s*3;/,
+  /grid-template-columns:\s*1fr 1fr;/,
+]) {
+  assert.match(gameplayActionsRule, contract)
+}
+assert.doesNotMatch(gameplayActionsRule, /position:\s*(?:absolute|fixed|sticky);/)
+assert.doesNotMatch(
+  gameplayCardStyles,
+  /@media \(max-height: 680px\)[\s\S]*?\.card\s*\{[^}]*height:\s*400px;/,
 )
 const passButtonRule = getRuleBody(
   gameplayCardStyles,
@@ -1899,24 +2251,132 @@ for (const selector of correctButtonSelectors) {
   assert.match(selector, /:not\(:disabled\)/)
 }
 
-const outgoingCardStart = gameplayCardSource.indexOf('{outgoingCard ? (')
-const outgoingCardEnd = gameplayCardSource.indexOf(') : null}', outgoingCardStart)
-assert.ok(outgoingCardStart >= 0 && outgoingCardEnd > outgoingCardStart)
-const outgoingCardSource = gameplayCardSource.slice(outgoingCardStart, outgoingCardEnd)
-assert.ok(outgoingCardSource.includes('className={`${styles.card} ${styles.outgoingCard}'))
-assert.match(outgoingCardSource, /aria-hidden="true"/)
-assert.match(outgoingCardSource, /<GameplayCardContents card=\{outgoingCard\.card\} \/>/)
 assert.match(
-  outgoingCardSource,
-  /outgoingCard\.decision === 'correct'[\s\S]*styles\.outgoingCorrect[\s\S]*styles\.outgoingPass/,
+  gameplayCardSource,
+  /const \[outgoingCards, setOutgoingCards\] = useState<OutgoingCardSnapshot\[]>\(\[\]\);/,
+)
+assert.doesNotMatch(gameplayCardSource, /useState<OutgoingCardSnapshot \| null>/)
+assert.match(gameplayCardSource, /const nextVisualIdRef = useRef\(1\);/)
+assert.match(gameplayCardSource, /readonly visualId: number;/)
+
+const removeOutgoingCardStart = gameplayCardSource.indexOf('const removeOutgoingCard')
+const releaseDecisionInteractionStart = gameplayCardSource.indexOf(
+  'const releaseDecisionInteraction',
+  removeOutgoingCardStart,
+)
+const completeDecisionInteractionStart = gameplayCardSource.indexOf(
+  'const completeDecisionInteraction',
+  releaseDecisionInteractionStart,
+)
+assert.ok(removeOutgoingCardStart >= 0)
+assert.ok(releaseDecisionInteractionStart > removeOutgoingCardStart)
+assert.ok(completeDecisionInteractionStart > releaseDecisionInteractionStart)
+assert.ok(commitDecisionStart > completeDecisionInteractionStart)
+const removeOutgoingCardSource = gameplayCardSource.slice(
+  removeOutgoingCardStart,
+  releaseDecisionInteractionStart,
+)
+const releaseDecisionInteractionSource = gameplayCardSource.slice(
+  releaseDecisionInteractionStart,
+  completeDecisionInteractionStart,
+)
+const completeDecisionInteractionSource = gameplayCardSource.slice(
+  completeDecisionInteractionStart,
+  commitDecisionStart,
 )
 assert.match(
-  outgoingCardSource,
-  /outgoingCard\.decisionOrigin === 'pointer' \? '' : styles\.outgoingControlOrigin/,
+  removeOutgoingCardSource,
+  /currentCards\.filter\(\(snapshot\) => snapshot\.visualId !== visualId\)/,
+)
+assert.match(
+  removeOutgoingCardSource,
+  /remainingCards\.length === currentCards\.length \? currentCards : remainingCards/,
+)
+assert.doesNotMatch(removeOutgoingCardSource, /setOutgoingCards\(\[\]\)|interactionTimerRef/)
+assert.match(releaseDecisionInteractionSource, /interactionTimerRef\.current !== null/)
+assert.match(releaseDecisionInteractionSource, /window\.clearTimeout\(interactionTimerRef\.current\)/)
+assert.match(releaseDecisionInteractionSource, /resolvingRef\.current = false;/)
+assert.match(releaseDecisionInteractionSource, /setIsResolving\(false\);/)
+assert.doesNotMatch(releaseDecisionInteractionSource, /setOutgoingCards|onDecisionInteractionComplete/)
+assert.match(completeDecisionInteractionSource, /if \(!resolvingRef\.current\) return;/)
+assert.match(completeDecisionInteractionSource, /releaseDecisionInteraction\(\);/)
+assert.match(
+  completeDecisionInteractionSource,
+  /onDecisionInteractionComplete\?\.\(decision, cardId\);/,
+)
+assert.doesNotMatch(completeDecisionInteractionSource, /setOutgoingCards|removeOutgoingCard/)
+
+const rejectionBranchStart = commitDecisionSource.indexOf("if (result.kind === 'rejected')")
+const rejectionBranchEnd = commitDecisionSource.indexOf(
+  'if (prefersReducedMotion)',
+  rejectionBranchStart,
+)
+assert.ok(rejectionBranchStart >= 0 && rejectionBranchEnd > rejectionBranchStart)
+const rejectionBranchSource = commitDecisionSource.slice(
+  rejectionBranchStart,
+  rejectionBranchEnd,
+)
+assert.match(
+  rejectionBranchSource,
+  /removeOutgoingCard\(visualId\);\s*releaseDecisionInteraction\(\);\s*return;/,
 )
 assert.doesNotMatch(
-  outgoingCardSource,
-  /onClick=|onKeyDown=|onPointer|tabIndex=/,
+  rejectionBranchSource,
+  /onDecisionInteractionComplete|completeDecisionInteraction|setOutgoingCards\(\[\]\)/,
+)
+
+const outgoingVisualStart = gameplayCardSource.indexOf('function OutgoingGameplayCard')
+const gameplayCardComponentStart = gameplayCardSource.indexOf(
+  'export function GameplayCard',
+  outgoingVisualStart,
+)
+assert.ok(outgoingVisualStart >= 0 && gameplayCardComponentStart > outgoingVisualStart)
+const outgoingVisualSource = gameplayCardSource.slice(
+  outgoingVisualStart,
+  gameplayCardComponentStart,
+)
+assert.ok(outgoingVisualSource.includes('className={`${styles.card} ${styles.outgoingCard}'))
+assert.match(outgoingVisualSource, /aria-hidden="true"/)
+assert.match(outgoingVisualSource, /<GameplayCardContents card=\{snapshot\.card\} \/>/)
+assert.match(
+  outgoingVisualSource,
+  /snapshot\.decision === 'correct'[\s\S]*styles\.outgoingCorrect[\s\S]*styles\.outgoingPass/,
+)
+assert.match(
+  outgoingVisualSource,
+  /snapshot\.decisionOrigin === 'pointer' \? '' : styles\.outgoingControlOrigin/,
+)
+assert.doesNotMatch(outgoingVisualSource, /onClick=|onKeyDown=|onPointer|tabIndex=/)
+assert.match(
+  outgoingVisualSource,
+  /onAnimationEnd=\{\(event\) => \{\s*if \(event\.target === event\.currentTarget\) onVisualComplete\(snapshot\.visualId\);/,
+)
+assert.match(
+  outgoingVisualSource,
+  /addEventListener\('animationcancel', handleAnimationCancel\)/,
+)
+assert.match(
+  outgoingVisualSource,
+  /removeEventListener\('animationcancel', handleAnimationCancel\)/,
+)
+assert.match(
+  outgoingVisualSource,
+  /const cleanupTimer = window\.setTimeout\([\s\S]*visualDuration \+ OUTGOING_CARD_CLEANUP_GRACE_MS/,
+)
+assert.match(outgoingVisualSource, /window\.clearTimeout\(cleanupTimer\);/)
+assert.doesNotMatch(outgoingVisualSource, /releaseDecisionInteraction|interactionTimerRef/)
+assert.equal(outgoingVisualSource.match(/window\.setTimeout/g)?.length, 1)
+
+const outgoingCardsRenderStart = gameplayCardSource.indexOf('{outgoingCards.map')
+const outgoingCardsRenderEnd = gameplayCardSource.indexOf('</div>', outgoingCardsRenderStart)
+assert.ok(outgoingCardsRenderStart >= 0 && outgoingCardsRenderEnd > outgoingCardsRenderStart)
+const outgoingCardsRenderSource = gameplayCardSource.slice(
+  outgoingCardsRenderStart,
+  outgoingCardsRenderEnd,
+)
+assert.match(
+  outgoingCardsRenderSource,
+  /outgoingCards\.map\(\(outgoingCard\) => \([\s\S]*key=\{outgoingCard\.visualId\}[\s\S]*snapshot=\{outgoingCard\}[\s\S]*onVisualComplete=\{removeOutgoingCard\}/,
 )
 assert.match(
   gameplayCardStyles,
@@ -1934,26 +2394,19 @@ assert.match(
   gameplayCardStyles,
   /\.outgoingControlOrigin\s*\{[^}]*animation-duration:\s*1800ms;[^}]*animation-timing-function:\s*cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
 )
-assert.match(gameplayCardSource, /const POINTER_DECISION_ANIMATION_MS = 180;/)
-assert.match(gameplayCardSource, /const CONTROL_DECISION_ANIMATION_MS = 1800;/)
+assert.match(gameplayCardSource, /const POINTER_DECISION_INTERACTION_LOCK_MS = 180;/)
+assert.match(gameplayCardSource, /const CONTROL_DECISION_INTERACTION_LOCK_MS = 320;/)
+assert.match(gameplayCardSource, /const POINTER_DECISION_VISUAL_MS = 180;/)
+assert.match(gameplayCardSource, /const CONTROL_DECISION_VISUAL_MS = 1800;/)
+assert.match(gameplayCardSource, /const OUTGOING_CARD_CLEANUP_GRACE_MS = 100;/)
 assert.doesNotMatch(gameplayCardSource, /REDUCED_MOTION_DECISION_ANIMATION_MS/)
 assert.match(
   gameplayCardSource,
   /window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/,
 )
-const completeDecisionStart = gameplayCardSource.indexOf('const completeDecision')
-assert.ok(completeDecisionStart >= 0 && commitDecisionStart > completeDecisionStart)
-const completeDecisionSource = gameplayCardSource.slice(
-  completeDecisionStart,
-  commitDecisionStart,
-)
-assert.match(completeDecisionSource, /if \(!resolvingRef\.current\) return;/)
-assert.match(completeDecisionSource, /resolvingRef\.current = false;/)
-assert.match(completeDecisionSource, /setIsResolving\(false\);/)
-assert.match(completeDecisionSource, /setOutgoingCard\(null\);/)
 const reducedMotionBranchStart = commitDecisionSource.indexOf('if (prefersReducedMotion)')
 const reducedMotionBranchEnd = commitDecisionSource.indexOf(
-  'const animationDuration',
+  'const interactionLockDuration',
   reducedMotionBranchStart,
 )
 assert.ok(reducedMotionBranchStart >= 0 && reducedMotionBranchEnd > reducedMotionBranchStart)
@@ -1961,13 +2414,24 @@ const reducedMotionBranch = commitDecisionSource.slice(
   reducedMotionBranchStart,
   reducedMotionBranchEnd,
 )
-assert.match(reducedMotionBranch, /completeDecision\(decision, card\.id\);\s*return;/)
-assert.doesNotMatch(reducedMotionBranch, /setTimeout/)
-assert.equal(commitDecisionSource.match(/window\.setTimeout/g)?.length, 1)
-assert.ok(presentationDelayIndex > reducedMotionBranchEnd)
 assert.match(
-  gameplayCardSource,
-  /decisionOrigin === 'pointer'[\s\S]*POINTER_DECISION_ANIMATION_MS[\s\S]*CONTROL_DECISION_ANIMATION_MS/,
+  reducedMotionBranch,
+  /completeDecisionInteraction\(decision, card\.id\);\s*return;/,
+)
+assert.doesNotMatch(reducedMotionBranch, /setTimeout|setOutgoingCards|OutgoingGameplayCard/)
+assert.equal(commitDecisionSource.match(/window\.setTimeout/g)?.length, 1)
+assert.ok(interactionDelayIndex > reducedMotionBranchEnd)
+assert.match(
+  commitDecisionSource,
+  /decisionOrigin === 'pointer'[\s\S]*POINTER_DECISION_INTERACTION_LOCK_MS[\s\S]*CONTROL_DECISION_INTERACTION_LOCK_MS/,
+)
+assert.match(
+  commitDecisionSource,
+  /interactionTimerRef\.current = window\.setTimeout\([\s\S]*completeDecisionInteraction\(decision, card\.id\)[\s\S]*interactionLockDuration/,
+)
+assert.equal(
+  gameplayCardSource.match(/interactionTimerRef\.current = window\.setTimeout/g)?.length,
+  1,
 )
 assert.match(
   gameplayCardSource,
@@ -1989,6 +2453,10 @@ assert.match(
 assert.match(
   gameplayCardStyles,
   /@keyframes outgoing-card-up[\s\S]*calc\(-100dvh - 100%\)/,
+)
+assert.match(
+  activeTurnViewSource,
+  /onDecisionInteractionComplete=\{\(decision, decisionCardId\) => \{\s*if \(decision === 'correct'\) setAttributionChooserCardId\(decisionCardId\)/,
 )
 
 assert.match(gamePageSource, /'--timer-progress-scale': progress,/)
@@ -2028,8 +2496,48 @@ assert.deepEqual(
   ],
 )
 const pageRule = getRuleBody(gameStyles, '\\.page', 'Gameplay page stacking context')
+assert.match(pageRule, /--route-inline-gutter:\s*var\(--space-md\);/)
 assert.match(pageRule, /position:\s*relative;/)
 assert.match(pageRule, /isolation:\s*isolate;/)
+assert.match(
+  gameStyles,
+  /\.activeTurn\s*\{\s*display:\s*grid;\s*grid-template-rows:\s*auto minmax\(0, 1fr\) auto;\s*gap:\s*var\(--space-xs\);\s*\}/,
+)
+const activeCardViewportRule = getRuleBody(
+  gameStyles,
+  '\\.cardViewport',
+  'Active gameplay flexible middle region',
+)
+for (const contract of [
+  /min-width:\s*0;/,
+  /min-height:\s*0;/,
+  /grid-row:\s*2;/,
+  /overflow-x:\s*hidden;/,
+  /overflow-y:\s*hidden;/,
+]) {
+  assert.match(activeCardViewportRule, contract)
+}
+assert.doesNotMatch(activeCardViewportRule, /position:\s*(?:absolute|fixed|sticky);/)
+const scrollableStateRule = getRuleBody(
+  gameStyles,
+  '\\.scrollableState',
+  'Gameplay completion and results shadow gutter',
+)
+for (const contract of [
+  /width:\s*calc\(100% \+ var\(--route-inline-gutter\) \+ var\(--route-inline-gutter\)\);/,
+  /margin-inline:\s*calc\(-1 \* var\(--route-inline-gutter\)\);/,
+  /padding:\s*var\(--space-sm\) var\(--space-shadow-gutter\);/,
+  /overflow-x:\s*hidden;/,
+  /overflow-y:\s*auto;/,
+  /overscroll-behavior-y:\s*contain;/,
+]) {
+  assert.match(scrollableStateRule, contract)
+}
+assert.doesNotMatch(scrollableStateRule, /overflow-x:\s*visible;/)
+assert.match(
+  gameStyles,
+  /@media \(max-width: 350px\)[\s\S]*\.page\s*\{[^}]*--route-inline-gutter:\s*var\(--space-sm\);[^}]*padding-inline:\s*max\(var\(--space-sm\), env\(safe-area-inset-left\)\)\s*max\(var\(--space-sm\), env\(safe-area-inset-right\)\);/,
+)
 const pageBackgroundRule = getRuleBody(
   gameStyles,
   '\\.page::before',
@@ -2099,7 +2607,7 @@ assert.match(gameStyles, /\.gameCompletePage::before\s*\{\s*background:\s*var\(-
 
 for (const [label, selectorPattern] of [
   ['Active header', '\\.activeHeader'],
-  ['Active card and action region', '\\.cardViewport'],
+  ['Active card region', '\\.cardViewport'],
 ]) {
   assert.match(
     getRuleBody(gameStyles, selectorPattern, `${label} entry animation`),
@@ -2152,7 +2660,7 @@ assert.match(
     '\\.gameCompletePage \\.terminalContent',
     'Game-complete terminal content',
   ),
-  /color:\s*var\(--color-text-strong\);/,
+  /color:\s*var\(--color-surface\);/,
 )
 
 const rootTokens = getRootTokens(globalStyles)
@@ -2165,6 +2673,37 @@ assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
 assert.equal(rootTokens.get('--color-tertiary-dark'), '#0c8c6c')
 assert.equal(rootTokens.get('--color-text-strong'), '#000')
 assert.equal(rootTokens.get('--radius-control-pill'), '999px')
+assert.equal(rootTokens.get('--shadow-control'), '0 8px 20px rgba(0, 91, 99, 0.12)')
+assert.equal(rootTokens.get('--space-shadow-gutter'), 'var(--space-lg)')
+assert.equal(resolveRootToken(rootTokens, '--space-shadow-gutter'), '1.5rem')
+assert.equal(rootTokens.get('--space-xl'), '2rem')
+
+const playerListBlockStartPixels = cssLengthToPixels(
+  resolveRootToken(rootTokens, '--space-shadow-gutter'),
+  'Player-list block-start gutter',
+)
+const playerListBlockEndPixels = cssLengthToPixels(
+  resolveRootToken(rootTokens, '--space-xl'),
+  'Player-list block-end gutter',
+)
+const controlShadow = getSingleShadowMetrics(
+  rootTokens.get('--shadow-control'),
+  'Control shadow',
+)
+const controlShadowBlockStartReach = Math.max(
+  0,
+  controlShadow.blurRadius - controlShadow.offsetY + controlShadow.spreadRadius,
+)
+const controlShadowBlockEndReach = Math.max(
+  0,
+  controlShadow.blurRadius + controlShadow.offsetY + controlShadow.spreadRadius,
+)
+assert.equal(playerListBlockStartPixels, 24)
+assert.equal(playerListBlockEndPixels, 32)
+assert.equal(controlShadowBlockStartReach, 12)
+assert.equal(controlShadowBlockEndReach, 28)
+assert.ok(playerListBlockStartPixels >= controlShadowBlockStartReach)
+assert.ok(playerListBlockEndPixels >= controlShadowBlockEndReach)
 assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
 
 const expectedCardTokenValues = new Map([
@@ -2203,7 +2742,7 @@ assert.equal(
 )
 assert.match(gamePageSource, /SE ACABÓ EL TIEMPO/)
 assert.match(gamePageSource, /Mezclar mazo/)
-assert.match(gamePageSource, /PARTIDA TERMINADA/)
+assert.match(gamePageSource, /FIN DE LA PARTIDA/)
 assert.match(gamePageSource, /Ver equipo ganador/)
 
 const partializeSource = setupStoreSource.slice(
@@ -2256,5 +2795,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, outgoing-card motion branches, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and animation timing, screen-reader output, and viewport layout remain manual checks.',
+  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, separate interaction/visual timing, monotonic concurrent outgoing snapshots, independent animation cleanup, reduced-motion completion, the three-row active layout, ordinary-flow actions, named height-query compact geometry, in-flow compact subtypes, the pan-y fallback policy, pointer-cancel cleanup, card-ID scroll reset before focus, gameplay and asymmetric Drawer shadow gutters, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and overlapping-animation timing, native pan-y cancellation/scrolling, the painted scroll-reset frame, screen-reader output, shadow rendering, short-height compact rendering, and viewport layout remain manual checks.',
 )

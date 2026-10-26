@@ -1,4 +1,6 @@
 .page {
+  --route-inline-gutter: var(--space-md);
+
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -211,6 +213,7 @@
 .cardViewport {
   min-width: 0;
   min-height: 0;
+  grid-row: 2;
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior-y: contain;
@@ -267,12 +270,15 @@
 
 .scrollableState {
   display: flex;
-  padding-block: var(--space-sm);
+  width: calc(100% + var(--route-inline-gutter) + var(--route-inline-gutter));
+  margin-inline: calc(-1 * var(--route-inline-gutter));
+  padding: var(--space-sm) var(--space-shadow-gutter);
   align-items: center;
   justify-content: center;
   justify-content: safe center;
   flex-direction: column;
   gap: var(--space-lg);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   text-align: center;
@@ -361,7 +367,11 @@
 
 @media (max-width: 350px) {
   .page {
-    padding-inline: var(--space-sm);
+    --route-inline-gutter: var(--space-sm);
+
+    padding-inline:
+      max(var(--space-sm), env(safe-area-inset-left))
+      max(var(--space-sm), env(safe-area-inset-right));
   }
 
   .handoff h1 {

@@ -53,6 +53,27 @@ function resolveRootToken(rootTokens, token, ancestors = []) {
   )
 }
 
+function cssLengthToPixels(value, label) {
+  const absoluteLength = value.match(/^(\d+(?:\.\d+)?)(px|rem)$/)
+  assert.ok(absoluteLength, `${label} must resolve to a px or rem length`)
+  return Number(absoluteLength[1]) * (absoluteLength[2] === 'rem' ? 16 : 1)
+}
+
+function getSingleShadowMetrics(value, label) {
+  assert.equal(typeof value, 'string', `${label} must be defined`)
+  const shadow = value.match(
+    /^(-?\d+(?:\.\d+)?)(?:px)?\s+(-?\d+(?:\.\d+)?)px\s+(\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?\s+(.+)$/,
+  )
+  assert.ok(shadow, `${label} must be one CSS box shadow`)
+  return {
+    offsetX: Number(shadow[1]),
+    offsetY: Number(shadow[2]),
+    blurRadius: Number(shadow[3]),
+    spreadRadius: shadow[4] ? Number(shadow[4]) : 0,
+    color: shadow[5],
+  }
+}
+
 function getRuleBody(source, selectorPattern, label) {
   const rule = source.match(new RegExp(`${selectorPattern}\\s*\\{([^}]*)\\}`))
   assert.ok(rule, `Missing CSS rule: ${label}`)
@@ -724,6 +745,25 @@ const selectionBackRule = getRuleBody(
 assert.match(selectionBackRule, /width:\s*40px !important;/)
 assert.match(selectionBackRule, /min-width:\s*40px !important;/)
 assert.match(selectionBackRule, /height:\s*40px !important;/)
+assert.match(
+  selectionBackRule,
+  /box-shadow:\s*var\(--shadow-edge-control\) !important;/,
+)
+assert.match(
+  cardsStyles,
+  /\.selectionBackButton:hover,\s*\.selectionBackButton:active,\s*\.selectionBackButton:focus\s*\{[^}]*box-shadow:\s*var\(--shadow-edge-control\) !important;/,
+)
+const selectionBackFocusRule = getRuleBody(
+  cardsStyles,
+  '\\.selectionBackButton:focus-visible',
+  'Keyboard-focused card selection back button',
+)
+assert.match(selectionBackFocusRule, /outline:\s*3px solid var\(--color-focus\);/)
+assert.match(selectionBackFocusRule, /outline-offset:\s*3px;/)
+assert.match(
+  selectionBackFocusRule,
+  /box-shadow:\s*var\(--shadow-edge-control\) !important;/,
+)
 assert.doesNotMatch(globalStyles, /border-radius:\s*var\(--radius-control-pill\)/)
 
 const partializeSource = setupStoreSource.slice(
@@ -901,7 +941,12 @@ for (const contract of [
 
 const lightningFooterStart = lightningBranchSource.indexOf('<footer')
 const lightningFooterEnd = lightningBranchSource.indexOf('</footer>', lightningFooterStart)
+const lightningScrollerStart = lightningBranchSource.indexOf(
+  '<div className={styles.cardScroller}>',
+)
+assert.ok(lightningScrollerStart > lightningHeaderEnd)
 assert.ok(lightningFooterStart >= 0)
+assert.ok(lightningFooterStart > lightningScrollerStart)
 assert.ok(lightningFooterEnd > lightningFooterStart)
 const lightningFooterSource = lightningBranchSource.slice(
   lightningFooterStart,
@@ -917,6 +962,57 @@ for (const helpId of ['main-selection-help', 'lightning-selection-help']) {
 assert.doesNotMatch(cardsPageSource, /aria-describedby=/)
 assert.doesNotMatch(cardsStyles, /\.(?:instruction|feedback|saveHelp)\b/)
 
+const cardsPageRule = getRuleBody(cardsStyles, '\\.page', 'Card-draft route gutter')
+assert.match(cardsPageRule, /--route-inline-gutter:\s*var\(--space-md\);/)
+const selectionLayoutRule = getRuleBody(
+  cardsStyles,
+  '\\.selectionLayout(?=\\s*\\{\\s*display:\\s*grid;)',
+  'Card selection clipped layout',
+)
+assert.match(selectionLayoutRule, /grid-template-rows:\s*auto minmax\(0, 1fr\) auto;/)
+assert.match(selectionLayoutRule, /overflow:\s*hidden;/)
+for (const contract of [
+  /width:\s*calc\(100% \+ var\(--route-inline-gutter\) \+ var\(--route-inline-gutter\)\);/,
+  /margin-inline:\s*calc\(-1 \* var\(--route-inline-gutter\)\);/,
+  /padding-inline:\s*var\(--route-inline-gutter\);/,
+  /grid-template-columns:\s*minmax\(0, 1fr\);/,
+]) {
+  assert.match(selectionLayoutRule, contract)
+}
+const cardScrollerRule = getRuleBody(
+  cardsStyles,
+  '\\.cardScroller',
+  'Card selection scrolling row',
+)
+for (const contract of [
+  /min-width:\s*0;/,
+  /min-height:\s*0;/,
+  /overflow-x:\s*hidden;/,
+  /overflow-y:\s*auto;/,
+]) {
+  assert.match(cardScrollerRule, contract)
+}
+const completionRule = getRuleBody(
+  cardsStyles,
+  '\\.completion',
+  'Card-draft completion shadow gutter',
+)
+for (const contract of [
+  /width:\s*calc\(100% \+ var\(--route-inline-gutter\) \+ var\(--route-inline-gutter\)\);/,
+  /margin-inline:\s*calc\(-1 \* var\(--route-inline-gutter\)\);/,
+  /padding:\s*var\(--space-sm\) var\(--space-shadow-gutter\);/,
+  /overflow-x:\s*hidden;/,
+  /overflow-y:\s*auto;/,
+  /overscroll-behavior-y:\s*contain;/,
+]) {
+  assert.match(completionRule, contract)
+}
+assert.doesNotMatch(completionRule, /overflow-x:\s*visible;/)
+assert.match(
+  cardsStyles,
+  /@media \(max-width: 350px\)[\s\S]*\.page\s*\{[^}]*--route-inline-gutter:\s*var\(--space-sm\);/,
+)
+
 const selectionHeaderRule = getRuleBody(
   cardsStyles,
   '\\.selectionHeader',
@@ -931,6 +1027,18 @@ const lightningHeaderRule = getRuleBody(
   cardsStyles,
   '\\.lightningSelectionHeader',
   'Compact lightning selection header',
+)
+for (const contract of [
+  /width:\s*calc\(100% \+ var\(--route-inline-gutter\) \+ var\(--route-inline-gutter\)\);/,
+  /margin-inline:\s*calc\(-1 \* var\(--route-inline-gutter\)\);/,
+  /padding-inline:\s*var\(--route-inline-gutter\);/,
+  /justify-self:\s*start;/,
+]) {
+  assert.match(lightningHeaderRule, contract)
+}
+assert.doesNotMatch(
+  lightningHeaderRule,
+  /padding-inline:\s*var\(--space-shadow-gutter\);/,
 )
 assert.match(
   lightningHeaderRule,
@@ -1098,6 +1206,127 @@ assert.equal(rootTokens.get('--color-primary'), '#00aab7')
 assert.equal(rootTokens.get('--color-secondary'), '#de2c6e')
 assert.equal(rootTokens.get('--color-tertiary'), '#11b087')
 assert.equal(rootTokens.get('--radius-control-pill'), '999px')
+assert.equal(
+  rootTokens.get('--shadow-edge-control'),
+  '0 6px 12px rgba(0, 170, 183, 0.27)',
+)
+assert.equal(rootTokens.get('--space-shadow-gutter'), 'var(--space-lg)')
+assert.equal(resolveRootToken(rootTokens, '--space-shadow-gutter'), '1.5rem')
+assert.equal(rootTokens.get('--mobile-breakpoint'), '390px')
+assert.match(
+  globalStyles,
+  /\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-sizing:\s*border-box;/,
+)
+assert.match(
+  getRuleBody(globalStyles, '#root', 'Interactive mobile shell'),
+  /width:\s*min\(var\(--mobile-breakpoint\), 100%\);/,
+)
+
+const mobileShellCapPixels = cssLengthToPixels(
+  rootTokens.get('--mobile-breakpoint'),
+  'Mobile shell cap',
+)
+const selectionControlTrackPixels = 40
+let minimumRouteGutterPixels = Number.POSITIVE_INFINITY
+for (const geometry of [
+  {
+    viewportWidth: 320,
+    routeGutterToken: '--space-sm',
+    expected: {
+      shellWidth: 320,
+      pageContentWidth: 296,
+      selectionBorderWidth: 320,
+      selectionContentWidth: 296,
+      headerBorderWidth: 320,
+      headerContentWidth: 296,
+      fixedColumnsWidth: 80,
+      titleTrackWidth: 216,
+      cardScrollerWidth: 296,
+      footerWidth: 296,
+    },
+  },
+  {
+    viewportWidth: 390,
+    routeGutterToken: '--space-md',
+    expected: {
+      shellWidth: 390,
+      pageContentWidth: 358,
+      selectionBorderWidth: 390,
+      selectionContentWidth: 358,
+      headerBorderWidth: 390,
+      headerContentWidth: 358,
+      fixedColumnsWidth: 80,
+      titleTrackWidth: 278,
+      cardScrollerWidth: 358,
+      footerWidth: 358,
+    },
+  },
+  {
+    viewportWidth: 768,
+    routeGutterToken: '--space-md',
+    expected: {
+      shellWidth: 390,
+      pageContentWidth: 358,
+      selectionBorderWidth: 390,
+      selectionContentWidth: 358,
+      headerBorderWidth: 390,
+      headerContentWidth: 358,
+      fixedColumnsWidth: 80,
+      titleTrackWidth: 278,
+      cardScrollerWidth: 358,
+      footerWidth: 358,
+    },
+  },
+]) {
+  const shellWidth = Math.min(geometry.viewportWidth, mobileShellCapPixels)
+  const routeGutterPixels = cssLengthToPixels(
+    resolveRootToken(rootTokens, geometry.routeGutterToken),
+    `${geometry.viewportWidth}px route gutter`,
+  )
+  minimumRouteGutterPixels = Math.min(minimumRouteGutterPixels, routeGutterPixels)
+
+  const pageContentWidth = shellWidth - 2 * routeGutterPixels
+  const selectionBorderWidth = pageContentWidth + 2 * routeGutterPixels
+  const selectionContentWidth = selectionBorderWidth - 2 * routeGutterPixels
+  const headerBorderWidth = selectionContentWidth + 2 * routeGutterPixels
+  const headerContentWidth = headerBorderWidth - 2 * routeGutterPixels
+  const fixedColumnsWidth = 2 * selectionControlTrackPixels
+  const titleTrackWidth = headerContentWidth - fixedColumnsWidth
+
+  assert.deepEqual(
+    {
+      shellWidth,
+      pageContentWidth,
+      selectionBorderWidth,
+      selectionContentWidth,
+      headerBorderWidth,
+      headerContentWidth,
+      fixedColumnsWidth,
+      titleTrackWidth,
+      cardScrollerWidth: selectionContentWidth,
+      footerWidth: selectionContentWidth,
+    },
+    geometry.expected,
+  )
+}
+assert.equal(minimumRouteGutterPixels, 12)
+
+const edgeControlShadow = getSingleShadowMetrics(
+  rootTokens.get('--shadow-edge-control'),
+  'Edge-control shadow',
+)
+assert.deepEqual(edgeControlShadow, {
+  offsetX: 0,
+  offsetY: 6,
+  blurRadius: 12,
+  spreadRadius: 0,
+  color: 'rgba(0, 170, 183, 0.27)',
+})
+const edgeControlHorizontalReach =
+  Math.abs(edgeControlShadow.offsetX) +
+  edgeControlShadow.blurRadius +
+  Math.max(0, edgeControlShadow.spreadRadius)
+assert.ok(edgeControlHorizontalReach <= minimumRouteGutterPixels)
 
 const expectedCardTokenValues = new Map([
   ['--color-card-surface', 'var(--color-surface)'],
@@ -1135,5 +1364,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, compact selection headers with hidden live feedback and accessible Relámpago back action=valid, completion and card-flow reduced-motion-safe entry animations=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid.',
+  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, compact selection headers with hidden live feedback, accessible Relámpago back action, edge-shadow clearance source contract, independent nested border-box arithmetic at 320px/390px/wider widths, bounded card scroller, and fixed footer row=valid, expanded completion scrollport with internal shadow space=valid, completion and card-flow reduced-motion-safe entry animations=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid. No browser rendering was exercised: actual shadow painting, focus rendering, and viewport layout remain manual checks.',
 )
