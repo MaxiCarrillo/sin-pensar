@@ -26,6 +26,7 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
+  padding: var(--space-sm);
   grid-template-rows: minmax(0, 1fr);
   container-name: gameplay-card-stack;
   container-type: size;
@@ -44,10 +45,11 @@
   position: relative;
   display: grid;
   box-sizing: border-box;
-  width: 100%;
-  max-width: 300px;
-  height: 100%;
-  max-height: 500px;
+  aspect-ratio: 9 / 16;
+  width: min(100%, 300px, 56.25cqh);
+  height: auto;
+  min-width: 0;
+  max-height: 100%;
   min-height: 0;
   margin: auto;
   grid-template-rows: minmax(38px, 0.45fr) repeat(3, minmax(72px, 1fr)) minmax(92px, 1.15fr);

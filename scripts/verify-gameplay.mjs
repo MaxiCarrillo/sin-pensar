@@ -1415,6 +1415,7 @@ const gameStyles = await readFile(
   'utf8',
 )
 const globalStyles = await readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+const rootTokens = getRootTokens(globalStyles)
 const setupStoreSource = await readFile(
   new URL('../src/shared/store/setup.store.ts', import.meta.url),
   'utf8',
@@ -1835,24 +1836,194 @@ const gameplayCardStackRule = getRuleBody(
   '\\.cardStack',
   'Active gameplay card stack',
 )
+assert.match(gameplayCardStackRule, /width:\s*100%;/)
 assert.match(gameplayCardStackRule, /min-width:\s*0;/)
 assert.match(gameplayCardStackRule, /min-height:\s*0;/)
+assert.equal(
+  getDeclarationValue(gameplayCardStackRule, 'padding', 'Active gameplay card stack'),
+  'var(--space-sm)',
+)
 assert.match(gameplayCardStackRule, /grid-template-rows:\s*minmax\(0, 1fr\);/)
 assert.match(gameplayCardStackRule, /container-name:\s*gameplay-card-stack;/)
 assert.match(gameplayCardStackRule, /container-type:\s*size;/)
+const gameplayStackedCardRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.cardStack > \\.card',
+  'Active and outgoing card stack placement',
+)
+assert.match(gameplayStackedCardRule, /grid-area:\s*1 \/ 1;/)
 
 const gameplayCardRule = gameplayCardStyles.match(/^\.card\s*\{([^}]*)\}/m)
 assert.ok(gameplayCardRule)
 assert.match(gameplayCardRule[1], /box-sizing:\s*border-box;/)
-assert.match(gameplayCardRule[1], /width:\s*100%;/)
-assert.match(gameplayCardRule[1], /height:\s*100%;/)
-assert.match(gameplayCardRule[1], /max-height:\s*500px;/)
+const gameplayCardAspectRatio = getDeclarationValue(
+  gameplayCardRule[1],
+  'aspect-ratio',
+  'Responsive gameplay card',
+).match(/^(\d+)\s*\/\s*(\d+)$/)
+assert.ok(gameplayCardAspectRatio)
+const cardInlineRatio = Number(gameplayCardAspectRatio[1])
+const cardBlockRatio = Number(gameplayCardAspectRatio[2])
+assert.deepEqual([cardInlineRatio, cardBlockRatio], [9, 16])
+assert.equal(gameplayCardStyles.match(/(?:^|\n)\s*aspect-ratio\s*:/g)?.length, 1)
+
+const gameplayCardWidthEquation = getDeclarationValue(
+  gameplayCardRule[1],
+  'width',
+  'Responsive gameplay card',
+)
+const gameplayCardWidthTerms = gameplayCardWidthEquation.match(
+  /^min\(100%,\s*(\d+(?:\.\d+)?)px,\s*(\d+(?:\.\d+)?)cqh\)$/,
+)
+assert.ok(gameplayCardWidthTerms)
+const cardInlineCap = Number(gameplayCardWidthTerms[1])
+const cardBlockToInlineScale = Number(gameplayCardWidthTerms[2]) / 100
+const cardAspectRatio = cardInlineRatio / cardBlockRatio
+assert.equal(cardInlineCap, 300)
+assert.equal(cardBlockToInlineScale, cardAspectRatio)
+
+assert.match(
+  globalStyles,
+  /\*,\s*\*::before,\s*\*::after\s*\{[^}]*box-sizing:\s*border-box;/,
+)
+const cardStackPadding = cssLengthToPixels(
+  resolveRootToken(rootTokens, '--space-sm'),
+  'Gameplay card-stack padding',
+)
+const cardFaceShadow = getSingleShadowMetrics(
+  rootTokens.get('--shadow-card-face'),
+  'Gameplay card-face shadow',
+)
+const cardBorderWidth = Number(
+  getDeclarationValue(gameplayCardRule[1], 'border', 'Responsive gameplay card'),
+)
+const shadowReach = {
+  inlineStart: Math.max(
+    0,
+    cardFaceShadow.blurRadius - cardFaceShadow.offsetX + cardFaceShadow.spreadRadius,
+  ),
+  inlineEnd: Math.max(
+    0,
+    cardFaceShadow.blurRadius + cardFaceShadow.offsetX + cardFaceShadow.spreadRadius,
+  ),
+  blockStart: Math.max(
+    0,
+    cardFaceShadow.blurRadius - cardFaceShadow.offsetY + cardFaceShadow.spreadRadius,
+  ),
+  blockEnd: Math.max(
+    0,
+    cardFaceShadow.blurRadius + cardFaceShadow.offsetY + cardFaceShadow.spreadRadius,
+  ),
+}
+assert.equal(cardStackPadding, 12)
+assert.equal(cardBorderWidth, 0)
+assert.deepEqual(shadowReach, {
+  inlineStart: 6,
+  inlineEnd: 10,
+  blockStart: 4,
+  blockEnd: 12,
+})
+for (const reach of Object.values(shadowReach)) {
+  assert.ok(cardStackPadding >= cardBorderWidth + reach)
+}
+assert.doesNotMatch(gameplayCardRule[1], /(?:^|\n)\s*padding(?:-[\w-]+)?:/)
+
+const responsiveCardCases = [
+  {
+    label: '320px shell',
+    outerInline: 296,
+    outerBlock: 600,
+    expectedInnerInline: 272,
+    expectedInnerBlock: 576,
+    expectedInline: 272,
+    expectedBlock: 272 / cardAspectRatio,
+  },
+  {
+    label: '390px shell',
+    outerInline: 358,
+    outerBlock: 600,
+    expectedInnerInline: 334,
+    expectedInnerBlock: 576,
+    expectedInline: 300,
+    expectedBlock: 300 / cardAspectRatio,
+  },
+  {
+    label: 'Short card stack',
+    outerInline: 358,
+    outerBlock: 400,
+    expectedInnerInline: 334,
+    expectedInnerBlock: 376,
+    expectedInline: 211.5,
+    expectedBlock: 376,
+  },
+  {
+    label: 'Native-pan boundary',
+    outerInline: 296,
+    outerBlock: 239,
+    expectedInnerInline: 272,
+    expectedInnerBlock: 215,
+    expectedInline: 120.9375,
+    expectedBlock: 215,
+  },
+]
+for (const cardCase of responsiveCardCases) {
+  const availableInline = cardCase.outerInline - 2 * cardStackPadding
+  const availableBlock = cardCase.outerBlock - 2 * cardStackPadding
+  const inlineSize = Math.min(
+    availableInline,
+    cardInlineCap,
+    availableBlock * cardBlockToInlineScale,
+  )
+  const blockSize = inlineSize / cardAspectRatio
+  const inlineCenteringSpace = (availableInline - inlineSize) / 2
+  const blockCenteringSpace = (availableBlock - blockSize) / 2
+  const epsilon = 1e-9
+  assert.equal(availableInline, cardCase.expectedInnerInline)
+  assert.equal(availableBlock, cardCase.expectedInnerBlock)
+  assert.ok(
+    Math.abs(inlineSize - cardCase.expectedInline) < epsilon,
+    `${cardCase.label} must choose the expected limiting dimension`,
+  )
+  assert.ok(
+    Math.abs(blockSize - cardCase.expectedBlock) < epsilon,
+    `${cardCase.label} must preserve the 9:16 box`,
+  )
+  assert.ok(
+    inlineSize <= availableInline + epsilon,
+    `${cardCase.label} must fit the card stack content-box inline size`,
+  )
+  assert.ok(
+    blockSize <= availableBlock + epsilon,
+    `${cardCase.label} must fit the card stack content-box block size`,
+  )
+  assert.ok(
+    cardStackPadding + inlineCenteringSpace >= cardBorderWidth + shadowReach.inlineStart,
+    `${cardCase.label} must contain the card's inline-start border and shadow`,
+  )
+  assert.ok(
+    cardStackPadding + inlineCenteringSpace >= cardBorderWidth + shadowReach.inlineEnd,
+    `${cardCase.label} must contain the card's inline-end border and shadow`,
+  )
+  assert.ok(
+    cardStackPadding + blockCenteringSpace >= cardBorderWidth + shadowReach.blockStart,
+    `${cardCase.label} must contain the card's block-start border and shadow`,
+  )
+  assert.ok(
+    cardStackPadding + blockCenteringSpace >= cardBorderWidth + shadowReach.blockEnd,
+    `${cardCase.label} must contain the card's block-end border and shadow`,
+  )
+}
+
+assert.match(gameplayCardRule[1], /height:\s*auto;/)
+assert.match(gameplayCardRule[1], /min-width:\s*0;/)
+assert.match(gameplayCardRule[1], /max-height:\s*100%;/)
 assert.match(gameplayCardRule[1], /min-height:\s*0;/)
+assert.match(gameplayCardRule[1], /margin:\s*auto;/)
 assert.match(
   gameplayCardRule[1],
   /grid-template-rows:\s*minmax\(38px, 0\.45fr\) repeat\(3, minmax\(72px, 1fr\)\) minmax\(92px, 1\.15fr\);/,
 )
-assert.doesNotMatch(gameplayCardRule[1], /(?:d?vh|aspect-ratio|clamp\()/)
+assert.doesNotMatch(gameplayCardRule[1], /\b(?:d|s|l)?v(?:h|w)\b/)
 assert.match(gameplayCardRule[1], /gap:\s*var\(--space-card-band-gutter\);/)
 assert.match(gameplayCardRule[1], /overflow:\s*hidden;/)
 assert.match(gameplayCardRule[1], /touch-action:\s*none;/)
@@ -1904,6 +2075,8 @@ const compactMinimumHeight =
 assert.equal(compactMinimumHeight, 214)
 const practicalCompactHeight = 216
 assert.ok(compactMinimumHeight <= practicalCompactHeight)
+assert.equal(469 + 2 * cardStackPadding, 493)
+assert.equal(215 + 2 * cardStackPadding, 239)
 
 const compactCardSectionRule = getRuleBody(
   compactCardStyles,
@@ -2382,6 +2555,15 @@ assert.match(
   gameplayCardStyles,
   /\.outgoingCard\s*\{[^}]*pointer-events:\s*none;/,
 )
+const outgoingCardRule = getRuleBody(
+  gameplayCardStyles,
+  '\\.outgoingCard',
+  'Outgoing gameplay card',
+)
+assert.doesNotMatch(
+  outgoingCardRule,
+  /(?:^|\n)\s*(?:aspect-ratio|(?:min-|max-)?(?:width|height))\s*:/,
+)
 assert.match(
   gameplayCardStyles,
   /\.outgoingCorrect\s*\{[^}]*animation:\s*outgoing-card-down 180ms ease-out forwards;/,
@@ -2663,7 +2845,6 @@ assert.match(
   /color:\s*var\(--color-surface\);/,
 )
 
-const rootTokens = getRootTokens(globalStyles)
 assert.equal(rootTokens.get('--color-surface'), '#fff')
 assert.equal(rootTokens.get('--color-primary'), '#00aab7')
 assert.equal(rootTokens.get('--color-primary-dark'), '#007f89')
@@ -2795,5 +2976,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, separate interaction/visual timing, monotonic concurrent outgoing snapshots, independent animation cleanup, reduced-motion completion, the three-row active layout, ordinary-flow actions, named height-query compact geometry, in-flow compact subtypes, the pan-y fallback policy, pointer-cancel cleanup, card-ID scroll reset before focus, gameplay and asymmetric Drawer shadow gutters, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and overlapping-animation timing, native pan-y cancellation/scrolling, the painted scroll-reset frame, screen-reader output, shadow rendering, short-height compact rendering, and viewport layout remain manual checks.',
+  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, separate interaction/visual timing, monotonic concurrent outgoing snapshots, independent animation cleanup, reduced-motion completion, the three-row active layout, ordinary-flow actions, the padded size-container content box, the single 9:16 inline/block equation, independent border-and-shadow containment arithmetic, representative source calculations, named height-query compact geometry, in-flow compact subtypes, the pan-y fallback policy, pointer-cancel cleanup, card-ID scroll reset before focus, gameplay and asymmetric Drawer shadow gutters, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and overlapping-animation timing, native pan-y cancellation/scrolling, the painted scroll-reset frame, screen-reader output, shadow rendering, short-height compact rendering, and viewport layout remain manual checks.',
 )
