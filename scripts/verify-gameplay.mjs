@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 import { concealActiveGameplayForRoute } from '../src/modules/game/game-route-privacy.ts'
+import { GAMEPLAY_STAGE_PRESENTATIONS } from '../src/modules/game/game-stage-presentation.ts'
 import { getKeyboardDecision, getSwipeDecision } from '../src/modules/game/swipe.ts'
 import {
   getGameplayTimerPresentation,
@@ -288,7 +289,7 @@ assert.deepEqual(
       kind: 'talk',
       label: 'RONDA 1',
       name: 'Ronda 1',
-      rule: 'Hablar',
+      rule: 'Todo vale',
       source: 'main',
     },
     {
@@ -296,7 +297,7 @@ assert.deepEqual(
       kind: 'mime',
       label: 'RONDA 2',
       name: 'Ronda 2',
-      rule: 'Mímica',
+      rule: 'Una palabra',
       source: 'main',
     },
     {
@@ -304,7 +305,7 @@ assert.deepEqual(
       kind: 'lightning',
       label: 'RELÁMPAGO',
       name: 'Relámpago',
-      rule: 'Todo permitido',
+      rule: 'Tres categorías',
       source: 'lightning',
     },
     {
@@ -312,13 +313,37 @@ assert.deepEqual(
       kind: 'sounds',
       label: 'RONDA 3',
       name: 'Ronda 3',
-      rule: 'Sonidos',
+      rule: 'Mímica',
       source: 'main',
     },
   ],
 )
 assert.deepEqual(GAMEPLAY_STAGES.map((stage) => stage.index), [0, 1, 2, 3])
 assert.equal(GAMEPLAY_STAGES.at(-1)?.kind, 'sounds')
+assert.deepEqual(GAMEPLAY_STAGE_PRESENTATIONS, {
+  0: {
+    attempts: 'Ilimitados',
+    allowed: 'Hablar, actuar, hacer sonidos, señalar, cantar, tararear y más.',
+    forbidden: 'Mencionar palabras que haya que adivinar o la palabra clave.',
+  },
+  1: {
+    attempts: 'Un intento por carta y jugador',
+    allowed: 'Decir exactamente una palabra y actuar.',
+    forbidden:
+      'Mencionar palabras que haya que adivinar o la palabra clave; decir más de una palabra; tararear, cantar o hacer sonidos.',
+  },
+  2: {
+    attempts: 'Un intento por carta y jugador',
+    allowed: 'Leer únicamente las tres categorías.',
+    forbidden: 'Mencionar la palabra clave.',
+  },
+  3: {
+    attempts: 'Un intento por carta y jugador',
+    allowed: 'Hacer mímica o actuar sin emitir sonidos.',
+    forbidden:
+      'Mencionar palabras que haya que adivinar o la palabra clave; hacer cualquier sonido.',
+  },
+})
 
 const exactDeckGame = createGame([2, 2], 22)
 const expectedMainDeck = exactDeckGame.input.cardDraft.playerDrafts.flatMap(
@@ -1443,6 +1468,8 @@ assert.match(handoffSource, /Continuar turno/)
 assert.match(handoffSource, /GAMEPLAY_PHASES\.concealedActive/)
 assert.match(handoffSource, /game\.pendingCardIds\.length/)
 assert.match(handoffSource, /getGameplayTurnDurationSeconds\(stage, game\.turnDuration\)/)
+assert.match(handoffSource, /GAMEPLAY_STAGE_PRESENTATIONS\[stage\.index\]/)
+assert.doesNotMatch(handoffSource, /stagePresentation\.mainAllowed/)
 assert.match(
   handoffSource,
   /<p className=\{styles\.turnLabel\}>Turno de:<\/p>\s*<h1 id="game-handoff-player">\{playerName\}<\/h1>\s*<p className=\{styles\.privacyInstruction\}>/,
@@ -1473,6 +1500,46 @@ assert.match(
 )
 assert.doesNotMatch(handoffSource, /JUEGAN TODOS|\$\{playerCount\} jugadores/)
 assert.doesNotMatch(handoffSource, /\bplayerCount\b/)
+const handoffReadingOrder = [
+  'styles.turnLabel',
+  'styles.privacyInstruction',
+  'styles.stageTitle',
+  'styles.roundSummary',
+  'styles.roundRules',
+  'styles.turnSummary',
+  'styles.bottomButton',
+].map((marker) => handoffSource.indexOf(marker))
+assert.ok(handoffReadingOrder.every((position) => position >= 0))
+assert.deepEqual([...handoffReadingOrder].sort((left, right) => left - right), handoffReadingOrder)
+assert.match(
+  gamePageSource,
+  /import \{ FieldTimeOutlined, LikeOutlined, MessageOutlined, UserOutlined \} from '@ant-design\/icons'/,
+)
+assert.match(
+  handoffSource,
+  /<span className=\{styles\.factLabel\}>\s*Duración<span className="visually-hidden">: <\/span>\s*<\/span>\s*<span className=\{`\$\{styles\.factIcon\} \$\{styles\.stopwatchVisual\}`\}>\s*<FieldTimeOutlined className=\{styles\.stopwatchIcon\} aria-hidden="true" \/>\s*<strong className=\{styles\.stopwatchValue\}>\s*\{stageDuration\}\s*<span aria-hidden="true">s<\/span>\s*<span className="visually-hidden"> segundos<\/span>/,
+)
+assert.equal(handoffSource.match(/ segundos/g)?.length, 1)
+assert.doesNotMatch(handoffSource, /<svg|StopwatchFactIcon|AttemptsFactIcon/)
+assert.match(
+  handoffSource,
+  /<span className=\{`\$\{styles\.factIcon\} \$\{styles\.attemptsIcon\}`\} aria-hidden="true">\s*<UserOutlined className=\{styles\.attemptsUserIcon\} \/>\s*<MessageOutlined className=\{styles\.attemptsMessageIcon\} \/>/,
+)
+assert.match(
+  handoffSource,
+  /<span className=\{styles\.factIcon\} aria-hidden="true">\s*<LikeOutlined className=\{styles\.allowedIcon\} \/>/,
+)
+assert.match(handoffSource, /<dt>Podés<\/dt>\s*<dd>\{stagePresentation\.allowed\}<\/dd>/)
+assert.match(handoffSource, /<dt>No podés<\/dt>\s*<dd>\{stagePresentation\.forbidden\}<\/dd>/)
+assert.match(
+  handoffSource,
+  /<h2 className=\{styles\.stageTitle\}>\{stage\.name\}<\/h2>/,
+)
+assert.doesNotMatch(handoffSource, /<h2 className=\{styles\.stageTitle\}>\{stage\.rule\}<\/h2>/)
+assert.match(
+  handoffSource,
+  /<span className=\{styles\.factLabel\}>Regla<\/span>\s*<strong className=\{styles\.factValue\}>\{stage\.rule\}<\/strong>/,
+)
 assert.match(gamePageSource, /blockInitialActiveCard/)
 assert.match(gamePageSource, /setBlockInitialActiveCard\(false\)[\s\S]*startTurn\(Date\.now\(\)\)/)
 const removedInitialStatus = [
@@ -1484,6 +1551,11 @@ const activeTurnViewStart = gamePageSource.indexOf('function ActiveTurnView')
 const activeTurnViewEnd = gamePageSource.indexOf('interface ScoreTableProps', activeTurnViewStart)
 assert.ok(activeTurnViewStart >= 0 && activeTurnViewEnd > activeTurnViewStart)
 const activeTurnViewSource = gamePageSource.slice(activeTurnViewStart, activeTurnViewEnd)
+assert.match(activeTurnViewSource, /\{stage\.label\} · \{stage\.rule\}/)
+assert.match(
+  gamePageSource,
+  /Sigue \{nextStage\.name\}: <strong>\{nextStage\.rule\}<\/strong>\./,
+)
 for (const liveRegionValue of ['statusMessage', 'liveAnnouncement']) {
   assert.match(
     activeTurnViewSource,
@@ -2831,6 +2903,75 @@ assert.match(
   /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.activeHeader,\s*\.cardViewport\s*\{[^}]*animation:\s*none;/,
 )
 assert.doesNotMatch(gameStyles, /\.status(?:\s|:|\{)/)
+const handoffRule = getRuleBody(gameStyles, '\\.handoff,\\s*\\.terminalState', 'Handoff rows')
+assert.match(handoffRule, /grid-template-rows:\s*minmax\(0, 1fr\) auto;/)
+const handoffContentRule = getRuleBody(
+  gameStyles,
+  '\\.handoffContent,\\s*\\.terminalContent,\\s*\\.centeredState',
+  'Scrollable handoff content',
+)
+assert.match(handoffContentRule, /min-height:\s*0;/)
+assert.match(handoffContentRule, /overflow-y:\s*auto;/)
+assert.match(handoffContentRule, /justify-content:\s*safe center;/)
+const roundSummaryRule = getRuleBody(gameStyles, '\\.roundSummary', 'Round summary')
+assert.match(roundSummaryRule, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/)
+assert.match(roundSummaryRule, /width:\s*100%;/)
+assert.match(roundSummaryRule, /border-block:\s*1px solid var\(--color-border\);/)
+const factIconRule = getRuleBody(gameStyles, '\\.factIcon', 'Shared handoff fact icon box')
+assert.match(factIconRule, /width:\s*2\.75rem;/)
+assert.match(factIconRule, /height:\s*2\.75rem;/)
+assert.match(factIconRule, /color:\s*var\(--color-primary\);/)
+assert.match(
+  getRuleBody(gameStyles, '\\.stopwatchIcon', 'Ant handoff time icon'),
+  /font-size:\s*2\.5rem;/,
+)
+const stopwatchVisualRule = getRuleBody(
+  gameStyles,
+  '\\.stopwatchVisual',
+  'Centered stopwatch composition',
+)
+assert.match(stopwatchVisualRule, /position:\s*relative;/)
+assert.doesNotMatch(stopwatchVisualRule, /grid-template-rows:/)
+const stopwatchValueRule = getRuleBody(
+  gameStyles,
+  '\\.stopwatchValue',
+  'Centered stopwatch seconds overlay',
+)
+assert.match(stopwatchValueRule, /position:\s*absolute;/)
+assert.match(stopwatchValueRule, /top:\s*50%;/)
+assert.match(stopwatchValueRule, /left:\s*44\.5%;/)
+assert.match(stopwatchValueRule, /transform:\s*translate\(-50%, -50%\);/)
+assert.match(stopwatchValueRule, /background:\s*var\(--color-surface\);/)
+assert.match(
+  stopwatchValueRule,
+  /border-radius:\s*var\(--radius-control-pill\);/,
+)
+assert.match(
+  getRuleBody(gameStyles, '\\.attemptsUserIcon', 'Ant handoff user icon'),
+  /font-size:\s*2\.25rem;/,
+)
+assert.match(
+  gameStyles,
+  /\.attemptsMessageIcon\s*\{[^}]*font-size:\s*1\.5rem;/,
+)
+assert.doesNotMatch(gameStyles, /\.factIconSvg/)
+assert.match(
+  getRuleBody(gameStyles, '\\.roundSummary li', 'Round summary column'),
+  /min-width:\s*0;/,
+)
+assert.match(
+  getRuleBody(gameStyles, '\\.factValue', 'Round summary value'),
+  /overflow-wrap:\s*anywhere;/,
+)
+const roundRulesRule = getRuleBody(gameStyles, '\\.roundRules', 'Compact semantic round rules')
+assert.match(roundRulesRule, /width:\s*100%;/)
+assert.match(
+  getRuleBody(gameStyles, '\\.roundRules div', 'Vertically centered round rule row'),
+  /align-items:\s*center;/,
+)
+assert.match(gameStyles, /\.roundRules dt\s*\{[^}]*font-size:\s*0\.6875rem;/)
+assert.match(gameStyles, /\.roundRules dd\s*\{[^}]*font-size:\s*0\.75rem;/)
+assert.match(gameStyles, /@media \(max-width: 350px\)[\s\S]*\.factValue/)
 assertRuleUsesPill(
   gameStyles,
   '\\.bottomButton,\\s*\\.resultActions button',
@@ -2976,5 +3117,5 @@ assert.match(cardsPageSource, /initializeGameplay\(/)
 assert.match(routesSource, /<Route path="\/game" element=\{<GamePage \/>\} \/>/)
 
 console.log(
-  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover the chooser, privacy gates, live regions, timer scheduling guards, the composited timer overlay, separate interaction/visual timing, monotonic concurrent outgoing snapshots, independent animation cleanup, reduced-motion completion, the three-row active layout, ordinary-flow actions, the padded size-container content box, the single 9:16 inline/block equation, independent border-and-shadow containment arithmetic, representative source calculations, named height-query compact geometry, in-flow compact subtypes, the pan-y fallback policy, pointer-cancel cleanup, card-ID scroll reset before focus, gameplay and asymmetric Drawer shadow gutters, action colors, and card layout. No browser rendering was exercised: Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and overlapping-animation timing, native pan-y cancellation/scrolling, the painted scroll-reset frame, screen-reader output, shadow rendering, short-height compact rendering, and viewport layout remain manual checks.',
+  'Gameplay verification passed: behavioral Node checks cover finite and ordered timestamp boundaries, inclusive deadlines, Lightning attribution/scoring, pause arithmetic, pure timer rebasing, exact decks, rotation, completion, setup compatibility, and transient store transitions; structural source checks cover exact shared stage rules across handoff/active/preview contexts, private handoff reading order and catalog exclusion, one accessible runtime-duration string with visible stopwatch seconds and hidden decorative geometry, primary decorative visuals, equal responsive summary columns, independently scrolling handoff information with a bottom action, the chooser, live regions, timer scheduling guards, the composited timer overlay, separate interaction/visual timing, monotonic concurrent outgoing snapshots, independent animation cleanup, reduced-motion completion, the three-row active layout, ordinary-flow actions, the padded size-container content box, the single 9:16 inline/block equation, independent border-and-shadow containment arithmetic, representative source calculations, named height-query compact geometry, in-flow compact subtypes, the pan-y fallback policy, pointer-cancel cleanup, card-ID scroll reset before focus, gameplay and asymmetric Drawer shadow gutters, action colors, and card layout. No browser rendering was exercised: handoff icon/text painting, 320px/390px and short-height layout, screen-reader output, Drawer mask/Escape/focus behavior, timer first-paint and scheduling behavior, Pointer Event and overlapping-animation timing, native pan-y cancellation/scrolling, the painted scroll-reset frame, shadow rendering, and short-height compact rendering remain manual checks.',
 )
