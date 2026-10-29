@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "verify:card-draft": "node scripts/verify-card-draft.mjs",
-    "verify:gameplay": "node scripts/verify-gameplay.mjs"
+    "verify:gameplay": "node scripts/verify-gameplay.mjs",
+    "verify:help": "node scripts/verify-help.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",

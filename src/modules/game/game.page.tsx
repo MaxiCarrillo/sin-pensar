@@ -37,14 +37,12 @@ import { useGameplayTimer } from './use-gameplay-timer';
 
 interface HandoffViewProps {
     game: Extract<GameplayState, { phase: 'handoff' | 'concealed-active' }>;
-    participant: CurrentTurnParticipant;
     playerName: string;
     onReveal: () => void;
 }
 
-function HandoffView({ game, participant, playerName, onReveal }: HandoffViewProps) {
+function HandoffView({ game, playerName, onReveal }: HandoffViewProps) {
     const stage = GAMEPLAY_STAGES[game.stageIndex];
-    const score = getScoreForTeam(game.scores, participant.team.id);
     const isResuming = game.phase === GAMEPLAY_PHASES.concealedActive;
     const isLightning = stage.kind === 'lightning';
     const stageDuration = getGameplayTurnDurationSeconds(stage, game.turnDuration);
@@ -95,20 +93,6 @@ function HandoffView({ game, participant, playerName, onReveal }: HandoffViewPro
                             <strong className={styles.factValue}>{stage.rule}</strong>
                         </li>
                     </ul>
-                    {/* <dl className={styles.turnSummary}>
-            <div>
-              <dt>{isLightning ? 'Control' : 'Equipo'}</dt>
-              <dd>{isLightning ? playerName : participant.team.name}</dd>
-            </div>
-            <div>
-              <dt>Cartas</dt>
-              <dd>{game.pendingCardIds.length}</dd>
-            </div>
-            <div>
-              <dt>{isLightning ? 'Participan' : 'Puntaje'}</dt>
-              <dd>{isLightning ? 'Todos' : score}</dd>
-            </div>
-          </dl> */}
                     <dl className={styles.roundRules} aria-label={`Reglas de ${stage.name}`}>
                         <div>
                             <dt>Podés</dt>
@@ -443,7 +427,6 @@ function GamePage() {
             return (
                 <HandoffView
                     game={game}
-                    participant={participant}
                     playerName={currentPlayer.name}
                     onReveal={handleReveal}
                 />

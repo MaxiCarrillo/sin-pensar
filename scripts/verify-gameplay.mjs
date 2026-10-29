@@ -1466,10 +1466,10 @@ assert.doesNotMatch(handoffSource, /CARD_CATALOG_BY_ID|GameplayCard|card\.title|
 assert.match(handoffSource, /Tocá para ver la carta/)
 assert.match(handoffSource, /Continuar turno/)
 assert.match(handoffSource, /GAMEPLAY_PHASES\.concealedActive/)
-assert.match(handoffSource, /game\.pendingCardIds\.length/)
 assert.match(handoffSource, /getGameplayTurnDurationSeconds\(stage, game\.turnDuration\)/)
 assert.match(handoffSource, /GAMEPLAY_STAGE_PRESENTATIONS\[stage\.index\]/)
 assert.doesNotMatch(handoffSource, /stagePresentation\.mainAllowed/)
+assert.doesNotMatch(handoffSource, /getScoreForTeam|\bscore\b|\bparticipant\b|turnSummary/)
 assert.match(
   handoffSource,
   /<p className=\{styles\.turnLabel\}>Turno de:<\/p>\s*<h1 id="game-handoff-player">\{playerName\}<\/h1>\s*<p className=\{styles\.privacyInstruction\}>/,
@@ -1477,18 +1477,6 @@ assert.match(
 assert.match(
   handoffSource,
   /Controla el dispositivo\. Todos pueden acertar y la carta se mantiene oculta hasta continuar\./,
-)
-assert.match(
-  handoffSource,
-  /<dt>\{isLightning \? 'Control' : 'Equipo'\}<\/dt>\s*<dd>\{isLightning \? playerName : participant\.team\.name\}<\/dd>/,
-)
-assert.match(
-  handoffSource,
-  /<dt>Cartas<\/dt>\s*<dd>\{game\.pendingCardIds\.length\}<\/dd>/,
-)
-assert.match(
-  handoffSource,
-  /<dt>\{isLightning \? 'Participan' : 'Puntaje'\}<\/dt>\s*<dd>\{isLightning \? 'Todos' : score\}<\/dd>/,
 )
 assert.match(
   handoffSource,
@@ -1501,12 +1489,11 @@ assert.match(
 assert.doesNotMatch(handoffSource, /JUEGAN TODOS|\$\{playerCount\} jugadores/)
 assert.doesNotMatch(handoffSource, /\bplayerCount\b/)
 const handoffReadingOrder = [
+  'styles.stageTitle',
   'styles.turnLabel',
   'styles.privacyInstruction',
-  'styles.stageTitle',
   'styles.roundSummary',
   'styles.roundRules',
-  'styles.turnSummary',
   'styles.bottomButton',
 ].map((marker) => handoffSource.indexOf(marker))
 assert.ok(handoffReadingOrder.every((position) => position >= 0))
@@ -1515,11 +1502,28 @@ assert.match(
   gamePageSource,
   /import \{ FieldTimeOutlined, LikeOutlined, MessageOutlined, UserOutlined \} from '@ant-design\/icons'/,
 )
+const durationSummaryStart = handoffSource.indexOf('<li className={styles.durationSummary}>')
+const durationSummaryEnd = handoffSource.indexOf('</li>', durationSummaryStart)
+assert.ok(durationSummaryStart >= 0 && durationSummaryEnd > durationSummaryStart)
+const durationSummarySource = handoffSource.slice(durationSummaryStart, durationSummaryEnd)
+assert.equal(durationSummarySource.match(/Duración/g)?.length, 1)
 assert.match(
-  handoffSource,
-  /<span className=\{styles\.factLabel\}>\s*Duración<span className="visually-hidden">: <\/span>\s*<\/span>\s*<span className=\{`\$\{styles\.factIcon\} \$\{styles\.stopwatchVisual\}`\}>\s*<FieldTimeOutlined className=\{styles\.stopwatchIcon\} aria-hidden="true" \/>\s*<strong className=\{styles\.stopwatchValue\}>\s*\{stageDuration\}\s*<span aria-hidden="true">s<\/span>\s*<span className="visually-hidden"> segundos<\/span>/,
+  durationSummarySource,
+  /<span className=\{styles\.factLabel\}>\s*Duración<span className="visually-hidden">: <\/span>\s*<\/span>/,
 )
-assert.equal(handoffSource.match(/ segundos/g)?.length, 1)
+assert.equal(durationSummarySource.match(/\{stageDuration\} segundos/g)?.length, 1)
+assert.match(
+  durationSummarySource,
+  /<strong className=\{styles\.factValue\}>\{stageDuration\} segundos<\/strong>/,
+)
+assert.match(
+  durationSummarySource,
+  /<FieldTimeOutlined className=\{styles\.stopwatchIcon\} aria-hidden="true" \/>/,
+)
+assert.match(
+  durationSummarySource,
+  /<strong className=\{styles\.stopwatchValue\}>\s*\{stageDuration\}\s*<span aria-hidden="true">s<\/span>\s*<span className="visually-hidden"> segundos<\/span>/,
+)
 assert.doesNotMatch(handoffSource, /<svg|StopwatchFactIcon|AttemptsFactIcon/)
 assert.match(
   handoffSource,

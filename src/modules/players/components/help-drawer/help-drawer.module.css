@@ -1,0 +1,172 @@
+.drawerContent {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.helpLayout {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-sm);
+  overflow: hidden;
+}
+
+.progress {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-xs);
+}
+
+.progress > p {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.stepIndicator {
+  display: grid;
+  width: 100%;
+  max-width: 18rem;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0.25rem;
+  list-style: none;
+}
+
+.stepIndicator li {
+  display: grid;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.stepIndicator li[aria-current='step'] {
+  border: 2px solid var(--color-primary-dark);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  transform: scale(1.12);
+}
+
+.carouselRegion {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.carousel,
+.carousel :global(.slick-list),
+.carousel :global(.slick-track),
+.carousel :global(.slick-slide),
+.carousel :global(.slick-slide > div) {
+  height: 100%;
+}
+
+.carousel :global(.slick-slide > div) {
+  min-width: 0;
+}
+
+.slide {
+  height: 100%;
+  min-width: 0;
+  padding: var(--space-xs) var(--space-xs) var(--space-sm);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.slide:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+.slide h3 {
+  margin: 0 0 var(--space-xs);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.introduction {
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.sections {
+  display: grid;
+  margin-top: var(--space-md);
+  gap: var(--space-sm);
+}
+
+.section {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.section h4 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  line-height: 1.3;
+}
+
+.section p,
+.section li {
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.section ul {
+  display: grid;
+  margin: 0;
+  padding-inline-start: var(--space-lg);
+  gap: 0.25rem;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.actions button {
+  min-width: 0;
+  min-height: 48px;
+  border-radius: var(--radius-control-pill);
+  font-weight: var(--font-weight-bold);
+}
+
+@media (max-width: 350px) {
+  .helpLayout {
+    gap: var(--space-xs);
+  }
+
+  .stepIndicator {
+    gap: 0.2rem;
+  }
+
+  .slide {
+    padding-inline: 0.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepIndicator li[aria-current='step'] {
+    transform: none;
+  }
+}

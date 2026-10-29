@@ -191,12 +191,6 @@
   border-color: var(--color-primary);
 }
 
-.helpContent {
-  width: 100%;
-  margin: 0 auto;
-  color: var(--color-text-muted);
-}
-
 .settingsContent {
   display: grid;
   gap: var(--space-lg);

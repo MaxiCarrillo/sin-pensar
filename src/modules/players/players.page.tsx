@@ -31,6 +31,7 @@ import {
 import { useSetupStore } from '@/shared/store/setup.store'
 import type { Player, TeamCount } from '@/shared/types/setup'
 
+import { HelpDrawer } from './components/help-drawer/help-drawer'
 import styles from './players.module.css'
 
 const EMPTY_NAME_MESSAGE = 'El nombre no puede estar vacío'
@@ -259,14 +260,11 @@ function PlayersPage() {
         </Tooltip>
       </header>
 
-      <AppDrawer
+      <HelpDrawer
         open={helpOpen}
-        title="Cómo jugar"
-        description="Conocé los pasos para preparar la partida."
+        mainDeckCardCount={mainDeckCardCount}
         onClose={() => setHelpOpen(false)}
-      >
-        <p className={styles.helpContent}>Las instrucciones detalladas se agregarán próximamente.</p>
-      </AppDrawer>
+      />
 
       <AppDrawer
         open={settingsOpen}
