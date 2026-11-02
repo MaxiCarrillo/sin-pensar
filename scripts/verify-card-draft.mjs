@@ -229,11 +229,11 @@ function completeCurrentPlayer(session, editMainSelection = false) {
 
 const integrity = validateCardCatalog(CARD_CATALOG)
 assert.deepEqual(integrity.errors, [])
-assert.equal(CARD_CATALOG.length, 200)
-assert.equal(new Set(CARD_IDS).size, 200)
+assert.equal(CARD_CATALOG.length, 250)
+assert.equal(new Set(CARD_IDS).size, 250)
 assert.deepEqual(
   CARD_IDS,
-  Array.from({ length: 200 }, (_, index) => `card-${String(index + 1).padStart(3, '0')}`),
+  Array.from({ length: 250 }, (_, index) => `card-${String(index + 1).padStart(3, '0')}`),
 )
 assert.deepEqual(
   CARD_CATALOG.slice(0, 3).map((card) => [
@@ -262,14 +262,14 @@ assert.ok(
   ),
 )
 
-const twentyOnePlayerResult = createCardDraftSession(
-  Array.from({ length: 21 }, (_, index) => `player-${index + 1}`),
+const twentySixPlayerResult = createCardDraftSession(
+  Array.from({ length: 26 }, (_, index) => `player-${index + 1}`),
   CARD_IDS,
   4,
   'over-capacity',
-  createSeededRandom(21),
+  createSeededRandom(26),
 )
-assert.deepEqual(twentyOnePlayerResult, { kind: 'rejected', reason: 'insufficient-cards' })
+assert.deepEqual(twentySixPlayerResult, { kind: 'rejected', reason: 'insufficient-cards' })
 
 const privacyDraft = createSession(4, 4, 44)
 let concealedSession = expectSuccess(revealCurrentPlayerCards(privacyDraft.session))
@@ -1367,5 +1367,5 @@ assert.equal(
 )
 
 console.log(
-  'Card draft verification passed: catalog=200, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, compact selection headers with hidden live feedback, accessible Relámpago back action, edge-shadow clearance source contract, independent nested border-box arithmetic at 320px/390px/wider widths, bounded card scroller, and fixed footer row=valid, expanded completion scrollport with internal shadow space=valid, completion and card-flow reduced-motion-safe entry animations=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid. No browser rendering was exercised: actual shadow painting, focus rendering, and viewport layout remain manual checks.',
+  'Card draft verification passed: catalog=250, deal=20x10, explicit main confirmation=valid, lightning exclusion=valid for quotas 3/4/5, configured/draft quota compatibility=valid, per-player privacy flow=valid, setup invalidation=valid, compact selection headers with hidden live feedback, accessible Relámpago back action, edge-shadow clearance source contract, independent nested border-box arithmetic at 320px/390px/wider widths, bounded card scroller, and fixed footer row=valid, expanded completion scrollport with internal shadow space=valid, completion and card-flow reduced-motion-safe entry animations=valid, Teams capacity UI and guarded assignment plus reduced-motion-safe entry animations=valid, native Player settings radio-card groups with icon-free deck/team typography, legend spacing, static hover behavior, and responsive selected/focus/indicator styles=valid, pill Button/Input contracts and explicit circle icon controls=valid, centered 16px card faces with absolute lower-right subtypes, keyword color hierarchy, and borderless shadow-only selection=valid. No browser rendering was exercised: actual shadow painting, focus rendering, and viewport layout remain manual checks.',
 )
