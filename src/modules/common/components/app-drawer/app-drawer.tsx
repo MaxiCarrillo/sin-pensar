@@ -6,8 +6,9 @@ import styles from './app-drawer.module.css'
 interface AppDrawerProps {
   open: boolean
   title: string
-  description: string
+  description?: string
   contentClassName?: string
+  visuallyHiddenTitle?: boolean
   size?: DrawerProps['size']
   onClose: () => void
   children: ReactNode
@@ -18,6 +19,7 @@ export function AppDrawer({
   title,
   description,
   contentClassName,
+  visuallyHiddenTitle = false,
   size,
   onClose,
   children,
@@ -27,7 +29,7 @@ export function AppDrawer({
 
   return (
     <Drawer
-      aria-describedby={descriptionId}
+      aria-describedby={description ? descriptionId : undefined}
       aria-labelledby={titleId}
       closable={false}
       destroyOnHidden
@@ -39,10 +41,16 @@ export function AppDrawer({
       onClose={onClose}
     >
       <div className={`${styles.content} ${contentClassName ?? ''}`}>
-        <hgroup className={styles.drawerHeader}>
-          <h2 id={titleId}>{title}</h2>
-          <p id={descriptionId}>{description}</p>
-        </hgroup>
+        {visuallyHiddenTitle ? (
+          <h2 className="visually-hidden" id={titleId}>
+            {title}
+          </h2>
+        ) : (
+          <hgroup className={styles.drawerHeader}>
+            <h2 id={titleId}>{title}</h2>
+            {description ? <p id={descriptionId}>{description}</p> : null}
+          </hgroup>
+        )}
         {children}
       </div>
     </Drawer>

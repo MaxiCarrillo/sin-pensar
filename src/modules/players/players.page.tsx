@@ -144,6 +144,7 @@ function PlayersPage() {
   )
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [attemptedTeams, setAttemptedTeams] = useState(false)
   const [durationDraft, setDurationDraft] = useState(turnDuration)
   const [cardCountDraft, setCardCountDraft] = useState(mainDeckCardCount)
   const [teamCountDraft, setTeamCountDraft] = useState<TeamCount>(teamCount)
@@ -225,13 +226,6 @@ function PlayersPage() {
     setSettingsOpen(true)
   }
 
-  const handleSaveSettings = () => {
-    setTurnDuration(durationDraft)
-    setMainDeckCardCount(cardCountDraft)
-    if (isValidTeamCount(players.length, teamCountDraft)) setTeamCount(teamCountDraft)
-    setSettingsOpen(false)
-  }
-
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -269,7 +263,7 @@ function PlayersPage() {
       <AppDrawer
         open={settingsOpen}
         title="Configuración"
-        description="Elegí cómo se preparará la partida."
+        description="Los cambios se guardan automáticamente."
         onClose={() => setSettingsOpen(false)}
       >
         <div className={styles.settingsContent}>
@@ -282,7 +276,10 @@ function PlayersPage() {
               name="turn-duration"
               value={durationDraft}
               onChange={(event) => {
-                if (isTurnDuration(event.target.value)) setDurationDraft(event.target.value)
+                if (isTurnDuration(event.target.value)) {
+                  setDurationDraft(event.target.value)
+                  setTurnDuration(event.target.value)
+                }
               }}
             >
               {TURN_DURATION_OPTIONS.map((option) => (
@@ -306,6 +303,7 @@ function PlayersPage() {
               onChange={(event) => {
                 if (isMainDeckCardCount(event.target.value)) {
                   setCardCountDraft(event.target.value)
+                  setMainDeckCardCount(event.target.value)
                 }
               }}
             >
@@ -332,6 +330,7 @@ function PlayersPage() {
                 onChange={(event) => {
                   if (isValidTeamCount(players.length, event.target.value)) {
                     setTeamCountDraft(event.target.value)
+                    setTeamCount(event.target.value)
                   }
                 }}
               >
@@ -352,8 +351,8 @@ function PlayersPage() {
               </p>
             )}
           </fieldset>
-          <Button type="primary" size="large" block onClick={handleSaveSettings}>
-            Guardar configuración
+          <Button type="primary" size="large" block onClick={() => setSettingsOpen(false)}>
+            Cerrar
           </Button>
         </div>
       </AppDrawer>
@@ -436,7 +435,7 @@ function PlayersPage() {
                 Alcanzaste el máximo de {MAX_PLAYERS} jugadores para repartir 10 cartas por persona.
               </p>
             ) : null}
-            {teamValidationMessage ? (
+            {attemptedTeams && teamValidationMessage ? (
               <p id="team-requirement" className={styles.teamValidation} role="status">
                 {teamValidationMessage}
               </p>
@@ -455,16 +454,19 @@ function PlayersPage() {
             >
               Configuración
             </Button>
-            <Tooltip title={canBuildTeams ? undefined : teamValidationMessage}>
+            <Tooltip title={attemptedTeams ? teamValidationMessage : undefined}>
               <span className={styles.buttonWrapper}>
                 <Button
                   className={styles.teamsButton}
                   type="primary"
                   size="large"
                   htmlType="button"
-                  disabled={!canBuildTeams}
-                  aria-describedby={teamValidationMessage ? 'team-requirement' : undefined}
-                  onClick={() => navigate('/teams')}
+                  aria-disabled={!canBuildTeams}
+                  aria-describedby={attemptedTeams && teamValidationMessage ? 'team-requirement' : undefined}
+                  onClick={() => {
+                    if (canBuildTeams) navigate('/teams')
+                    else setAttemptedTeams(true)
+                  }}
                 >
                   Armar equipos
                 </Button>

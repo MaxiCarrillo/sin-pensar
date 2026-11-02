@@ -14,11 +14,26 @@ interface HelpStepSectionDefinition {
 }
 
 interface HelpStepDefinition {
+  accent: HelpAccent
   id: string
+  icon: HelpIconKey
   title: string
   introduction: HelpCopy
   sections: readonly HelpStepSectionDefinition[]
 }
+
+export type HelpAccent = 'primary' | 'secondary' | 'tertiary'
+
+export type HelpIconKey =
+  | 'category'
+  | 'decks'
+  | 'lightning'
+  | 'objective'
+  | 'round-one'
+  | 'round-three'
+  | 'round-two'
+  | 'summary'
+  | 'teams'
 
 export interface HelpStepSection {
   label?: string
@@ -27,7 +42,9 @@ export interface HelpStepSection {
 }
 
 export interface HelpStep {
+  accent: HelpAccent
   id: string
+  icon: HelpIconKey
   title: string
   introduction: string
   sections: readonly HelpStepSection[]
@@ -35,7 +52,9 @@ export interface HelpStep {
 
 export const HELP_STEP_DEFINITIONS = [
   {
+    accent: 'primary',
     id: 'objective',
+    icon: 'objective',
     title: 'Objetivo',
     introduction: 'Adivinar la mayor cantidad de tarjetas lo más rápido posible.',
     sections: [
@@ -45,7 +64,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'category',
+    icon: 'category',
     title: 'Elegir categoría',
     introduction: 'Antes de empezar, acuerden una categoría entre todos fuera de la app.',
     sections: [
@@ -56,7 +77,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'teams',
+    icon: 'teams',
     title: 'Equipos',
     introduction: 'Agregá a todos los jugadores y elegí una cantidad de equipos disponible.',
     sections: [
@@ -74,7 +97,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'decks',
+    icon: 'decks',
     title: 'Mazos',
     introduction: ({ cardDealSize }) =>
       `Cada persona recibe ${cardDealSize} tarjetas y hace su selección en privado.`,
@@ -95,7 +120,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'round-one',
+    icon: 'round-one',
     title: 'Ronda 1',
     introduction: 'Todo vale',
     sections: [
@@ -111,7 +138,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'tertiary',
     id: 'round-two',
+    icon: 'round-two',
     title: 'Ronda 2',
     introduction: 'Una palabra y actuación',
     sections: [
@@ -131,7 +160,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'lightning',
+    icon: 'lightning',
     title: 'Relámpago',
     introduction: 'Tres categorías',
     sections: [
@@ -149,7 +180,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'secondary',
     id: 'round-three',
+    icon: 'round-three',
     title: 'Ronda 3',
     introduction: 'Mímica sin sonido',
     sections: [
@@ -162,7 +195,9 @@ export const HELP_STEP_DEFINITIONS = [
     ],
   },
   {
+    accent: 'primary',
     id: 'summary',
+    icon: 'summary',
     title: 'Resumen',
     introduction: 'Adivinen la mayor cantidad de tarjetas lo más rápido posible para sumar puntos.',
     sections: [
@@ -189,7 +224,9 @@ export function createHelpSteps(
   const context = { cardDealSize, mainDeckCardCount }
 
   return HELP_STEP_DEFINITIONS.map((step) => ({
+    accent: step.accent,
     id: step.id,
+    icon: step.icon,
     title: step.title,
     introduction: resolveCopy(step.introduction, context),
     sections: step.sections.map((section) => ({

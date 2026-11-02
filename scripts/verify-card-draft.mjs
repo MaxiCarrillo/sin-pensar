@@ -521,6 +521,12 @@ const routesSource = await readFile(
 
 assert.ok(setupStoreSource.includes("players.length >= MAX_PLAYERS) return { kind: 'limit-reached' }"))
 assert.ok(playersPageSource.includes('disabled={hasReachedPlayerLimit}'))
+assert.match(playersPageSource, /useState\(false\)[\s\S]*const \[attemptedTeams, setAttemptedTeams\] = useState\(false\)/)
+assert.match(playersPageSource, /attemptedTeams && teamValidationMessage \? \([\s\S]*id="team-requirement"[\s\S]*role="status"/)
+assert.match(playersPageSource, /aria-disabled=\{!canBuildTeams\}[\s\S]*if \(canBuildTeams\) navigate\('\/teams'\)[\s\S]*else setAttemptedTeams\(true\)/)
+assert.match(playersPageSource, /if \(isTurnDuration\(event\.target\.value\)\) \{\s*setDurationDraft\(event\.target\.value\)\s*setTurnDuration\(event\.target\.value\)/)
+assert.match(playersPageSource, /if \(isMainDeckCardCount\(event\.target\.value\)\) \{\s*setCardCountDraft\(event\.target\.value\)\s*setMainDeckCardCount\(event\.target\.value\)/)
+assert.match(playersPageSource, /if \(isValidTeamCount\(players\.length, event\.target\.value\)\) \{\s*setTeamCountDraft\(event\.target\.value\)\s*setTeamCount\(event\.target\.value\)/)
 assert.ok(teamsPageSource.includes('disabled={draftResult.kind === \'invalid\'}'))
 assert.ok(teamsPageSource.includes("navigate('/cards')"))
 assert.ok(routesSource.includes('<Route path="/cards" element={<CardsPage />} />'))
@@ -625,10 +631,7 @@ for (const contract of [
 }
 assert.match(playersPageSource, /deriveValidTeamCounts\(players\.length\)/)
 assert.match(playersPageSource, /deriveBalancedTeamSizes\(playerCount, teamCount\)/)
-assert.match(
-  playersPageSource,
-  /const handleSaveSettings[\s\S]*setTurnDuration\(durationDraft\)[\s\S]*setMainDeckCardCount\(cardCountDraft\)[\s\S]*setTeamCount\(teamCountDraft\)[\s\S]*setSettingsOpen\(false\)/,
-)
+assert.match(playersPageSource, /description="Los cambios se guardan automáticamente\."[\s\S]*onClose=\{\(\) => setSettingsOpen\(false\)\}/)
 
 const optionCardStylesStart = playersStyles.indexOf('.settingsGroup .optionCardGrid')
 const optionCardStylesEnd = playersStyles.indexOf('.settingsRequirement', optionCardStylesStart)
