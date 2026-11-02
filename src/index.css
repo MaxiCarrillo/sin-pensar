@@ -49,7 +49,7 @@
   --font-weight-extrabold: 800;
   --avatar-size-xl: 150px;
   --mobile-breakpoint: 390px;
-  --font-family: Inter, ui-rounded, 'Segoe UI', system-ui, sans-serif;
+  --font-family: 'Nunito', system-ui, sans-serif;
 
   font-family: var(--font-family);
   line-height: 1.5;
@@ -61,6 +61,15 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* A touch-WebKit heuristic, not an operating-system identifier. */
+@supports (-webkit-touch-callout: none) and (font-family: ui-rounded) {
+  @media (pointer: coarse) {
+    :root {
+      --font-family: ui-rounded, 'Nunito', system-ui, sans-serif;
+    }
+  }
 }
 
 *,
@@ -100,7 +109,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 

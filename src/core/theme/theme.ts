@@ -17,7 +17,7 @@ export const appTheme: ThemeConfig = {
     borderRadius: 16,
     borderRadiusLG: 24,
     controlHeightLG: 40,
-    fontFamily: "Inter, ui-rounded, 'Segoe UI', system-ui, sans-serif",
+    fontFamily: 'var(--font-family)',
   },
   components: {
     Button: {
